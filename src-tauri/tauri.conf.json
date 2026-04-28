@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "Hoggie's Tool Kit",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 960,
-        "minHeight": 620,
+        "width": 1180,
+        "height": 720,
+        "minWidth": 920,
+        "minHeight": 560,
         "decorations": false,
         "transparent": false
       }

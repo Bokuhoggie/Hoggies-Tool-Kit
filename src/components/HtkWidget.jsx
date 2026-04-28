@@ -160,6 +160,39 @@ function MagnifyGlassSVG({ color, flip, baseColor }) {
   )
 }
 
+function CleaverSVG({ color, flip, baseColor }) {
+  // Chef's cleaver — wide rectangular blade tapering to a point at the bottom corner,
+  // with a stout handle. Reads as "knife" but distinct from the slim IMAGE blade.
+  return (
+    <svg width="42" height="190" viewBox="0 0 42 190" fill="none">
+      <g transform={flip ? "translate(42, 0) scale(-1, 1)" : undefined}>
+        {/* Wide cleaver blade body */}
+        <rect x="6"  y="8"  width="30" height="90" fill={color} opacity="0.95"/>
+        {/* Top spine highlight */}
+        <rect x="6"  y="8"  width="30" height="4" fill="rgba(255,255,255,0.22)"/>
+        {/* Cutting-edge bevel */}
+        <rect x="6"  y="92" width="30" height="6" fill="rgba(0,0,0,0.18)"/>
+        {/* Tapered tip — corner extends past the blade */}
+        <polygon points="6,98 36,98 36,108" fill={color} opacity="0.92"/>
+        <polygon points="6,98 6,104 36,104" fill="rgba(0,0,0,0.18)"/>
+        {/* Rivet hole detail in blade */}
+        <rect x="11" y="20" width="3" height="3" fill="rgba(0,0,0,0.3)"/>
+        {/* Bolster — metal collar between blade and handle */}
+        <rect x="12" y="108" width="18" height="8" fill={baseColor || '#9090A8'}/>
+        <rect x="13" y="109" width="16" height="6" fill={baseColor ? lighten(baseColor, 0.25) : '#C8C8DC'}/>
+        {/* Handle */}
+        <rect x="14" y="116" width="14" height="56" fill={color} opacity="0.85"/>
+        <rect x="15" y="116" width="3"  height="56" fill="rgba(255,255,255,0.18)"/>
+        {/* Handle rivets */}
+        <rect x="19" y="130" width="4" height="4" fill={baseColor ? darken(baseColor, 0.1) : '#707080'}/>
+        <rect x="19" y="150" width="4" height="4" fill={baseColor ? darken(baseColor, 0.1) : '#707080'}/>
+        {/* Handle pommel */}
+        <rect x="12" y="170" width="18" height="6" fill={baseColor || '#9090A8'}/>
+      </g>
+    </svg>
+  )
+}
+
 function CorkscrewSVG({ color, flip, baseColor }) {
   return (
     <svg width="42" height="190" viewBox="0 0 42 190" fill="none">
@@ -431,9 +464,10 @@ function KnifeHandleHorizontal({ open, themeId }) {
    TOOL CONFIG (Divided by pivot side)
 ============================================================ */
 const LEFT_TOOLS = [
-  { label: 'IMAGE',  route: '/image', color: 'var(--accent-3)', glow: 'var(--glow-cyan)',   Blade: BladeSVG,       angleOpen: -60, angleClosed: 90,  flip: false, flipY: true  },
-  { label: 'AUDIO',  route: '/audio', color: 'var(--accent-2)', glow: 'var(--glow-pink)',   Blade: ScissorsSVG,    angleOpen: -40, angleClosed: 90,  flip: false, flipY: true  },
-  { label: 'VIDEO',  route: '/video', color: 'var(--accent)',   glow: 'var(--glow-accent)', Blade: ScrewdriverSVG, angleOpen: -20, angleClosed: 90,  flip: false, flipY: false },
+  { label: 'IMAGE',  route: '/image', color: 'var(--accent-3)', glow: 'var(--glow-cyan)',   Blade: BladeSVG,       angleOpen: -75, angleClosed: 90,  flip: false, flipY: true  },
+  { label: 'AUDIO',  route: '/audio', color: 'var(--accent-2)', glow: 'var(--glow-pink)',   Blade: ScissorsSVG,    angleOpen: -55, angleClosed: 90,  flip: false, flipY: true  },
+  { label: 'STEMS',  route: '/stems', color: 'var(--accent-2)', glow: 'var(--glow-pink)',   Blade: CleaverSVG,     angleOpen: -35, angleClosed: 90,  flip: false, flipY: true  },
+  { label: 'VIDEO',  route: '/video', color: 'var(--accent)',   glow: 'var(--glow-accent)', Blade: ScrewdriverSVG, angleOpen: -15, angleClosed: 90,  flip: false, flipY: false },
 ]
 
 const RIGHT_TOOLS = [
@@ -458,10 +492,14 @@ export default function HtkWidget() {
   const [dragOverWidget, setDragOverWidget] = useState(false)
   const [isWaving, setIsWaving] = useState(false)
   const [waveBlades, setWaveBlades] = useState(new Set())
+  // Tool currently doing work — its blade is held in the open/raised position
+  // so the user sees which tool is busy without the choppy wave loop visualizing
+  // every blade incorrectly.
+  const [busyRoute, setBusyRoute] = useState(null)
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Listen for blade flick / peek / wave events
+  // Listen for blade flick / peek / wave / busy events
   useEffect(() => {
     const handleFlick = (e) => {
       const route = e.detail
@@ -470,13 +508,24 @@ export default function HtkWidget() {
     }
     const handlePeek = (e) => setPeekingTool(e.detail)
     const handleWave = (e) => setIsWaving(e.detail)
+    const handleBusy = (e) => {
+      const detail = e.detail || {}
+      // Accept either { route, busy } or just a route string for set / null for clear.
+      if (typeof detail === 'string' || detail === null) {
+        setBusyRoute(detail || null)
+      } else {
+        setBusyRoute(detail.busy ? detail.route : null)
+      }
+    }
     window.addEventListener('blade-flick', handleFlick)
     window.addEventListener('blade-peek', handlePeek)
     window.addEventListener('blade-wave', handleWave)
+    window.addEventListener('blade-busy', handleBusy)
     return () => {
       window.removeEventListener('blade-flick', handleFlick)
       window.removeEventListener('blade-peek', handlePeek)
       window.removeEventListener('blade-wave', handleWave)
+      window.removeEventListener('blade-busy', handleBusy)
     }
   }, [])
 
@@ -494,7 +543,7 @@ export default function HtkWidget() {
   useEffect(() => {
     if (!isWaving) { setWaveBlades(new Set()); return }
     // Interleaved order: alternates left↔right for a "busy cutting" feel
-    const ORDER = [0, 3, 1, 4, 2, 5, 6]
+    const ORDER = [0, 4, 1, 5, 2, 6, 3, 7]
     const INTERVAL = 110  // ms between each blade firing
     const HOLD     = 175  // ms each blade stays open (overlap = 2 blades at once most of the time)
     let step = 0
@@ -593,7 +642,7 @@ export default function HtkWidget() {
 
         {/* ─── BLADES ─── Rendered behind handle context */}
         {ALL_TOOLS.map((tool, i) => {
-          const isLeft = i < 3
+          const isLeft = i < LEFT_TOOLS.length
           const ToolBlade = tool.Blade
           
           // Determine local anchor point on the handle
@@ -607,12 +656,14 @@ export default function HtkWidget() {
           const isOpen = open || flickingTool === tool.route
           const isPeeking = peekingTool === tool.route && !isOpen
           const isWaveActive = isWaving && !open && waveBlades.has(i)
+          const isBusy = busyRoute === tool.route && !isOpen
 
           // Wave opens only 40% of the way — a quick chop, not a full fan
           const waveAngle = tool.angleClosed + (tool.angleOpen - tool.angleClosed) * 0.4
 
           let currentAngle = tool.angleClosed
           if (isOpen) currentAngle = tool.angleOpen
+          else if (isBusy) currentAngle = tool.angleOpen   // hold raised while working
           else if (isWaveActive) currentAngle = waveAngle
           else if (isPeeking) {
              currentAngle = tool.angleClosed + (tool.angleOpen - tool.angleClosed) * 0.4
@@ -621,19 +672,19 @@ export default function HtkWidget() {
           return (
             <button
               key={tool.route}
-              className={`sk-blade-item ${(isOpen || isPeeking || isWaveActive) ? 'open' : ''} ${hovered === tool.route ? 'hovered' : ''}`}
+              className={`sk-blade-item ${(isOpen || isPeeking || isWaveActive || isBusy) ? 'open' : ''} ${hovered === tool.route ? 'hovered' : ''}`}
               style={{
                 left: `${leftOffset}px`,
                 top: `${topOffset}px`,
                 transform: `rotate(${currentAngle}deg)`,
-                zIndex: (hovered === tool.route || flickingTool === tool.route || isPeeking || isWaveActive) ? 15 : 10,
+                zIndex: (hovered === tool.route || flickingTool === tool.route || isPeeking || isWaveActive || isBusy) ? 15 : 10,
                 // Snappy choppy transition while waving; normal stagger otherwise
                 ...(isWaving ? { transition: 'transform 75ms cubic-bezier(0.2, 0, 0.6, 1)' } : {
                   transitionDelay: (flickingTool === tool.route || isPeeking)
                     ? '0ms'
                     : (open
-                      ? `${isLeft ? i * 60 : (6 - i) * 60}ms`
-                      : `${isLeft ? (2 - i) * 50 : (i - 3) * 50}ms`)
+                      ? `${isLeft ? i * 60 : (ALL_TOOLS.length - 1 - i) * 60}ms`
+                      : `${isLeft ? (LEFT_TOOLS.length - 1 - i) * 50 : (i - LEFT_TOOLS.length) * 50}ms`)
                 })
               }}
               onClick={(e) => {

@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { ThemeProvider, useTheme } from './contexts/ThemeContext.jsx'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -8,6 +7,7 @@ import ImageConverter from './pages/ImageConverter.jsx'
 import AudioConverter from './pages/AudioConverter.jsx'
 import VideoConverter from './pages/VideoConverter.jsx'
 import Downloader from './pages/Downloader.jsx'
+import StemSeparator from './pages/StemSeparator.jsx'
 import PdfTools from './pages/PdfTools.jsx'
 import FileHasher from './pages/FileHasher.jsx'
 import FileInspector from './pages/FileInspector.jsx'
@@ -36,88 +36,6 @@ function SettingsCog() {
         <rect x="10" y="10" width="4"  height="4"  fill="#AAAACC"/>
       </svg>
     </button>
-  )
-}
-
-// ─── Update notifier ──────────────────────────────────────────────────────────
-function UpdateNotifier() {
-  const [state, setState] = useState('idle') // idle | available | downloading | downloaded | error
-  const [version, setVersion] = useState('')
-  const [progress, setProgress] = useState(0)
-  const [dismissed, setDismissed] = useState(false)
-
-  useEffect(() => {
-    const api = window.htk?.updater
-    if (!api) return
-
-    api.onUpdateAvailable((info) => { setVersion(info.version); setState('available'); setDismissed(false) })
-    api.onProgress((p) => { setState('downloading'); setProgress(p.percent) })
-    api.onDownloaded(() => setState('downloaded'))
-    api.onError(() => setState('error'))
-
-    return () => api.offAll?.()
-  }, [])
-
-  if (dismissed || state === 'idle' || state === 'error') return null
-
-  return (
-    <div style={{
-      position: 'fixed', top: 42, left: '50%', transform: 'translateX(-50%)',
-      zIndex: 2000,
-      background: 'var(--bg-surface)',
-      border: '1px solid var(--accent)',
-      boxShadow: '0 0 16px var(--glow-accent)',
-      borderRadius: 6,
-      padding: '8px 14px',
-      display: 'flex', alignItems: 'center', gap: 12,
-      fontSize: 12,
-      fontFamily: "'Press Start 2P', monospace",
-      color: 'var(--text-primary)',
-      minWidth: 320,
-      maxWidth: 460,
-    }}>
-      {state === 'available' && (
-        <>
-          <span style={{ color: 'var(--accent)', fontSize: 10 }}>▲ v{version} available</span>
-          <button
-            className="btn btn-primary btn-sm"
-            style={{ fontSize: 10, padding: '4px 10px', marginLeft: 'auto' }}
-            onClick={() => window.htk.updater.download()}
-          >Download</button>
-          <button
-            className="btn btn-ghost btn-sm"
-            style={{ fontSize: 10, padding: '4px 8px' }}
-            onClick={() => setDismissed(true)}
-          >✕</button>
-        </>
-      )}
-      {state === 'downloading' && (
-        <>
-          <span style={{ flex: 1 }}>
-            <span style={{ color: 'var(--accent)', fontSize: 10 }}>Downloading update…</span>
-            <div style={{ marginTop: 4, height: 4, background: 'var(--bg-hover)', borderRadius: 2 }}>
-              <div style={{ height: '100%', width: `${progress}%`, background: 'var(--accent)', borderRadius: 2, transition: 'width 0.3s' }} />
-            </div>
-          </span>
-          <span style={{ fontSize: 10, opacity: 0.7 }}>{progress}%</span>
-        </>
-      )}
-      {state === 'downloaded' && (
-        <>
-          <span style={{ color: 'var(--accent)', fontSize: 10 }}>✓ Ready to install</span>
-          <button
-            className="btn btn-primary btn-sm"
-            style={{ fontSize: 10, padding: '4px 10px', marginLeft: 'auto' }}
-            onClick={() => window.htk.updater.install()}
-          >Restart & Install</button>
-          <button
-            className="btn btn-ghost btn-sm"
-            style={{ fontSize: 10, padding: '4px 8px' }}
-            onClick={() => setDismissed(true)}
-          >✕</button>
-        </>
-      )}
-    </div>
   )
 }
 
@@ -220,6 +138,7 @@ export default function App() {
               <Route path="/audio" element={<AudioConverter />} />
               <Route path="/video" element={<VideoConverter />} />
               <Route path="/download" element={<Downloader />} />
+              <Route path="/stems" element={<StemSeparator />} />
               <Route path="/pdf" element={<PdfTools />} />
               <Route path="/hash" element={<FileHasher />} />
               <Route path="/inspector" element={<FileInspector />} />
@@ -229,7 +148,6 @@ export default function App() {
         </main>
         <HtkWidget />
         <SettingsCog />
-        <UpdateNotifier />
         <TronCycles />
       </div>
     </HashRouter>

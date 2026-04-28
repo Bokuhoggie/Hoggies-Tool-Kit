@@ -15,7 +15,7 @@ export default function Downloader() {
   const [outputDir, setOutputDir] = useState('')
   const [loading, setLoading]     = useState(false)
   const [progress, setProgress]   = useState(null)
-  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-wave', { detail: loading })) }, [loading])
+  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-busy', { detail: { route: '/download', busy: loading } })) }, [loading])
   const [result, setResult]       = useState(null)
 
   // Advanced
@@ -25,6 +25,35 @@ export default function Downloader() {
   const [subsLang, setSubsLang]             = useState('en')
   const [rateLimit, setRateLimit]           = useState('')
   const [cookiesFromBrowser, setCookiesFromBrowser] = useState('')
+
+  // yt-dlp metadata
+  const [ytDlpVersion, setYtDlpVersion] = useState('')
+  const [ytDlpUpdating, setYtDlpUpdating] = useState(false)
+  const [setupStage, setSetupStage] = useState(null) // null | 'downloading' | 'ready'
+
+  // First-run binary download notifier — listen once on mount
+  useEffect(() => {
+    api.downloader.onSetup(({ stage }) => {
+      setSetupStage(stage)
+      if (stage === 'ready') setTimeout(() => setSetupStage(null), 1500)
+    })
+  }, [])
+
+  // Probe yt-dlp version on mount (and after updates)
+  const refreshYtDlpVersion = () => {
+    api.downloader.ytDlpVersion().then(r => {
+      if (r?.installed && r?.version) setYtDlpVersion(r.version)
+    }).catch(() => {})
+  }
+  useEffect(refreshYtDlpVersion, [])
+
+  const updateYtDlp = async () => {
+    setYtDlpUpdating(true)
+    const r = await api.downloader.ytDlpUpdate()
+    setYtDlpUpdating(false)
+    if (r?.success) refreshYtDlpVersion()
+    else alert(`Update failed: ${r?.error || 'unknown error'}`)
+  }
 
   useEffect(() => {
     api.settings?.read().then(s => {
@@ -152,7 +181,18 @@ export default function Downloader() {
               </div>
             )}
 
-            {loading && (
+            {setupStage === 'downloading' && (
+              <div className="progress-wrap">
+                <div className="progress-label">
+                  <span>Setting up yt-dlp (one-time, ~30 MB)…</span>
+                </div>
+                <div className="progress-track">
+                  <div className="progress-bar progress-bar-indeterminate" style={{ width: '40%' }} />
+                </div>
+              </div>
+            )}
+
+            {loading && setupStage !== 'downloading' && (
               <div className="progress-wrap">
                 <div className="progress-label">
                   <span>{progress?.title || 'Starting download…'}</span>
@@ -235,6 +275,34 @@ export default function Downloader() {
               </select>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                 yt-dlp will borrow your session cookies from the selected browser to download login-gated content.
+              </div>
+            </div>
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label">yt-dlp Engine</label>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '8px 12px',
+                background: 'var(--bg-hover)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                fontSize: 12,
+              }}>
+                <span style={{ color: 'var(--text-muted)' }}>Version:</span>
+                <span style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>
+                  {ytDlpVersion || '—'}
+                </span>
+                <div style={{ flex: 1 }} />
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={updateYtDlp}
+                  disabled={ytDlpUpdating}
+                  title="Re-download the latest yt-dlp build (fixes broken extractors)"
+                >
+                  {ytDlpUpdating ? '⟳ Updating…' : '↑ Update'}
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                If a site stops working (YouTube, IG, TikTok change often), update yt-dlp first.
               </div>
             </div>
             <div className="adv-note">

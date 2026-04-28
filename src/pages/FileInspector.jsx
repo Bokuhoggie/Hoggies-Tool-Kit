@@ -202,6 +202,20 @@ export default function FileInspector() {
                     Open in {info.suggestedToolLabel} ↗
                   </button>
                 )}
+                {info.category === 'audio' && (
+                  <button
+                    className="btn btn-secondary inspector-send-btn"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('blade-peek', { detail: null }))
+                      window.dispatchEvent(new CustomEvent('blade-flick', { detail: '/stems' }))
+                      navigate('/stems', { state: { file: info.path } })
+                    }}
+                    onMouseEnter={() => window.dispatchEvent(new CustomEvent('blade-peek', { detail: '/stems' }))}
+                    onMouseLeave={() => window.dispatchEvent(new CustomEvent('blade-peek', { detail: null }))}
+                  >
+                    Split Stems ↗
+                  </button>
+                )}
               </div>
             </div>
           </div>

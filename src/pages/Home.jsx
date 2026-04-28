@@ -18,7 +18,7 @@ export default function Home() {
       <div className="home-footer" style={{ position: 'fixed', bottom: 20, left: 48, right: 48 }}>
         <span>&#9632; 100% LOCAL</span>
         <span>&#9632; NO UPLOADS</span>
-        <span>&#9632; FFMPEG + SHARP + YT-DLP</span>
+        <span>&#9632; FFMPEG + RUST + YT-DLP</span>
         <span className="blink">_</span>
       </div>
     </div>

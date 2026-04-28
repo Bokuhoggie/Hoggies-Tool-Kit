@@ -47,10 +47,13 @@ window.htk = {
   },
 
   downloader: {
-    download:     (opts) => invoke('downloader_download', { args: opts }),
-    selectFolder: ()     => invoke('downloader_select_folder'),
-    onProgress:   (cb)   => onEvent('downloader:progress', cb),
-    offProgress:  ()     => offEvent('downloader:progress'),
+    download:      (opts) => invoke('downloader_download', { args: opts }),
+    selectFolder:  ()     => invoke('downloader_select_folder'),
+    onProgress:    (cb)   => onEvent('downloader:progress', cb),
+    offProgress:   ()     => offEvent('downloader:progress'),
+    onSetup:       (cb)   => onEvent('downloader:setup', cb),
+    ytDlpVersion:  ()     => invoke('downloader_yt_dlp_version'),
+    ytDlpUpdate:   ()     => invoke('downloader_yt_dlp_update'),
   },
 
   pdf: {
@@ -85,6 +88,15 @@ window.htk = {
   inspector: {
     analyze:    (filePath) => invoke('inspector_analyze', { filePath }),
     selectFile: ()         => invoke('inspector_select_file'),
+  },
+
+  stems: {
+    separate:        (opts) => invoke('stems_separate', { args: opts }),
+    onProgress:      (cb)   => onEvent('stems:progress', cb),
+    onSetup:         (cb)   => onEvent('stems:setup', cb),
+    offProgress:     ()     => offEvent('stems:progress'),
+    demucsVersion:   ()     => invoke('stems_demucs_version'),
+    demucsUpdate:    ()     => invoke('stems_demucs_update'),
   },
 
   media: {

@@ -11,6 +11,7 @@ use commands::inspector_commands::*;
 use commands::media_commands::*;
 use commands::pdf_commands::*;
 use commands::settings_commands::*;
+use commands::stems_commands::*;
 
 fn main() {
     tauri::Builder::default()
@@ -48,6 +49,12 @@ fn main() {
             pdf_to_images,
             // Downloader
             downloader_download,
+            downloader_yt_dlp_version,
+            downloader_yt_dlp_update,
+            // Stems
+            stems_separate,
+            stems_demucs_version,
+            stems_demucs_update,
             // Inspector
             inspector_analyze,
             // Dialogs

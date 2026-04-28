@@ -23,6 +23,8 @@ async fn ensure_yt_dlp(app: &AppHandle) -> Result<PathBuf, String> {
         return Ok(path);
     }
 
+    let _ = app.emit("downloader:setup", serde_json::json!({ "stage": "downloading" }));
+
     // Download yt-dlp from GitHub releases (macOS universal binary)
     // Write to a temp file first, then rename atomically to prevent races
     // when two concurrent calls both see path.exists() == false.
@@ -30,7 +32,7 @@ async fn ensure_yt_dlp(app: &AppHandle) -> Result<PathBuf, String> {
     let url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(120))
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -55,6 +57,8 @@ async fn ensure_yt_dlp(app: &AppHandle) -> Result<PathBuf, String> {
 
     // Atomic rename into place
     std::fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
+
+    let _ = app.emit("downloader:setup", serde_json::json!({ "stage": "ready" }));
 
     Ok(path)
 }
@@ -139,6 +143,13 @@ pub async fn downloader_download(app: AppHandle, args: DownloadArgs) -> serde_js
     }
 
     let format_type = args.format_type.as_deref().unwrap_or("video");
+    let quality = args.quality.as_deref().unwrap_or("1080p");
+    let max_h = match quality {
+        "720p" => 720,
+        "480p" => 480,
+        "360p" => 360,
+        _ => 1080,
+    };
     let is_twitter = args.url.contains("twitter.com")
         || args.url.contains("x.com")
         || args.url.contains("t.co");
@@ -147,20 +158,14 @@ pub async fn downloader_download(app: AppHandle, args: DownloadArgs) -> serde_js
         let audio_fmt = args.audio_format.as_deref().unwrap_or("mp3");
         cmd_args.extend(["-x".into(), "--audio-format".into(), audio_fmt.into()]);
     } else if is_twitter {
+        // Twitter/X serves pre-muxed mp4 variants — pick the one that fits the quality cap.
         cmd_args.extend([
             "-f".into(),
-            "best[ext=mp4]/best".into(),
+            format!("best[height<={}][ext=mp4]/best[ext=mp4]/best", max_h),
             "--merge-output-format".into(),
             "mp4".into(),
         ]);
     } else {
-        let quality = args.quality.as_deref().unwrap_or("1080p");
-        let max_h = match quality {
-            "720p" => 720,
-            "480p" => 480,
-            "360p" => 360,
-            _ => 1080,
-        };
         cmd_args.extend([
             "-f".into(),
             format!(
@@ -192,7 +197,7 @@ pub async fn downloader_download(app: AppHandle, args: DownloadArgs) -> serde_js
     let mut child = match Command::new(&yt_dlp)
         .args(&cmd_args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
     {
         Ok(c) => c,
@@ -236,11 +241,96 @@ pub async fn downloader_download(app: AppHandle, args: DownloadArgs) -> serde_js
         });
     }
 
+    // Capture stderr so we can surface yt-dlp's actual error message instead of
+    // a generic "exited with error". We collect into a buffer rather than
+    // streaming because errors are usually a few lines and arrive at the end.
+    let stderr_buf: std::sync::Arc<std::sync::Mutex<String>> =
+        std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    if let Some(stderr) = child.stderr.take() {
+        let buf = stderr_buf.clone();
+        tokio::spawn(async move {
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if let Ok(mut s) = buf.lock() {
+                    s.push_str(&line);
+                    s.push('\n');
+                }
+            }
+        });
+    }
+
     match child.wait().await {
         Ok(status) if status.success() => {
             serde_json::json!({ "success": true, "outputDir": out_folder })
         }
-        Ok(_) => serde_json::json!({ "success": false, "error": "yt-dlp exited with error" }),
+        Ok(status) => {
+            let err_text = stderr_buf.lock().map(|s| s.clone()).unwrap_or_default();
+            // Pull the most useful line (yt-dlp puts the human message after "ERROR:")
+            let msg = err_text
+                .lines()
+                .rev()
+                .find(|l| l.contains("ERROR:"))
+                .map(|l| l.trim().to_string())
+                .unwrap_or_else(|| {
+                    let trimmed = err_text.trim();
+                    if trimmed.is_empty() {
+                        format!("yt-dlp exited with code {}", status.code().unwrap_or(-1))
+                    } else {
+                        trimmed.to_string()
+                    }
+                });
+            serde_json::json!({ "success": false, "error": msg })
+        }
         Err(e) => serde_json::json!({ "success": false, "error": e.to_string() }),
+    }
+}
+
+// ── yt-dlp version + self-update ──────────────────────────────────────────
+
+#[tauri::command]
+pub async fn downloader_yt_dlp_version(app: AppHandle) -> serde_json::Value {
+    let yt_dlp = match ensure_yt_dlp(&app).await {
+        Ok(p) => p,
+        Err(e) => return serde_json::json!({ "installed": false, "error": e }),
+    };
+    let output = Command::new(&yt_dlp)
+        .arg("--version")
+        .output()
+        .await;
+    match output {
+        Ok(o) if o.status.success() => {
+            let version = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            serde_json::json!({ "installed": true, "version": version })
+        }
+        Ok(o) => serde_json::json!({
+            "installed": true,
+            "error": String::from_utf8_lossy(&o.stderr).to_string()
+        }),
+        Err(e) => serde_json::json!({ "installed": false, "error": e.to_string() }),
+    }
+}
+
+#[tauri::command]
+pub async fn downloader_yt_dlp_update(app: AppHandle) -> serde_json::Value {
+    // Force a fresh download by removing the current binary, then re-fetching.
+    // yt-dlp's built-in `-U` is unreliable when the binary lives in app_data and
+    // ownership/permissions can vary; a clean re-download is simpler and atomic.
+    let path = yt_dlp_path(&app);
+    if path.exists() {
+        if let Err(e) = std::fs::remove_file(&path) {
+            return serde_json::json!({
+                "success": false,
+                "error": format!("Could not remove old binary: {}", e)
+            });
+        }
+    }
+    match ensure_yt_dlp(&app).await {
+        Ok(_) => {
+            // Report new version
+            let v = downloader_yt_dlp_version(app).await;
+            serde_json::json!({ "success": true, "version": v.get("version").cloned() })
+        }
+        Err(e) => serde_json::json!({ "success": false, "error": e }),
     }
 }

@@ -15,7 +15,7 @@ function MergeTab() {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-wave', { detail: loading })) }, [loading])
+  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-busy', { detail: { route: '/pdf', busy: loading } })) }, [loading])
 
   useEffect(() => {
     return () => { savePageState('pdf-merge', { files, outputDir }) }
@@ -129,7 +129,7 @@ function SplitTab() {
   const [rangeStr, setRangeStr] = useState('1-3')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
-  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-wave', { detail: loading })) }, [loading])
+  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-busy', { detail: { route: '/pdf', busy: loading } })) }, [loading])
 
   useEffect(() => {
     api.settings?.read().then(s => {
@@ -218,7 +218,7 @@ function CompressTab({ preloadFile }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [progressMsg, setProgressMsg] = useState(null)
-  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-wave', { detail: loading })) }, [loading])
+  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-busy', { detail: { route: '/pdf', busy: loading } })) }, [loading])
 
   useEffect(() => {
     api.settings?.read().then(s => {
@@ -305,9 +305,8 @@ function CompressTab({ preloadFile }) {
         <div style={{
           padding: '10px 14px',
           marginBottom: 16,
-          fontSize: 'calc(6px * var(--font-scale))',
-          fontFamily: "'VT323', monospace",
           fontSize: '15px',
+          fontFamily: "'VT323', monospace",
           color: 'var(--text-secondary)',
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border)',

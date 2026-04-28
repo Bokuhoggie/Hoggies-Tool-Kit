@@ -34,7 +34,7 @@ export default function ImageConverter() {
   const [dragOver, setDragOver]         = useState(false)
   const [customName, setCustomName]     = useState('')
   const [icoPreset, setIcoPreset]       = useState('256')
-  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-wave', { detail: loading })) }, [loading])
+  useEffect(() => { window.dispatchEvent(new CustomEvent('blade-busy', { detail: { route: '/image', busy: loading } })) }, [loading])
   const [isFlashing, setIsFlashing]     = useState(false)
 
   // ── Remove BG tab state ──

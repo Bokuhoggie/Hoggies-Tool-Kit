@@ -30,6 +30,8 @@ opener = { version = "0.7", features = ["reveal"] }
 chrono = "0.4"
 regex-lite = "0.1"
 tokio = { version = "1", features = ["process", "io-util", "fs", "rt"] }
+flate2 = "1"
+tar = "0.4"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
