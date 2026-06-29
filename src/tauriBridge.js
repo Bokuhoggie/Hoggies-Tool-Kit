@@ -30,6 +30,11 @@ window.htk = {
     selectFiles:   ()     => invoke('image_select_files'),
     removeBg:      (opts) => invoke('image_remove_bg', { args: opts }),
     readAsDataURL: (path) => invoke('image_read_as_data_url', { filePath: path }),
+    upscale:           (opts) => invoke('image_upscale', { args: opts }),
+    onUpscaleSetup:    (cb)   => onEvent('upscale:setup', cb),
+    onUpscaleProgress: (cb)   => onEvent('upscale:progress', cb),
+    realesrganVersion: ()     => invoke('image_realesrgan_version'),
+    realesrganUpdate:  ()     => invoke('image_realesrgan_update'),
   },
 
   video: {

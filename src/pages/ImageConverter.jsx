@@ -49,6 +49,20 @@ export default function ImageConverter() {
   const [bgPreviewAfter, setBgPreviewAfter]   = useState(null)
   const [bgEyedropper, setBgEyedropper]       = useState(false)
 
+  // ── Upscale tab state ──
+  const [upFile, setUpFile]             = useState('')
+  const [upScale, setUpScale]           = useState(4)        // 2 | 3 | 4
+  const [upModel, setUpModel]           = useState('realesrgan-x4plus') // general | anime | anime-video
+  const [upOutputName, setUpOutputName] = useState('')
+  const [upStatus, setUpStatus]         = useState('idle')   // idle | done | Error: …
+  const [upDragOver, setUpDragOver]     = useState(false)
+  const [upSetupStage, setUpSetupStage] = useState(null)     // downloading | extracting | ready
+  const [upProgress, setUpProgress]     = useState(null)     // { percent }
+  const [upPreviewBefore, setUpPreviewBefore] = useState(null)
+  const [upPreviewAfter, setUpPreviewAfter]   = useState(null)
+  const [esrganVersion, setEsrganVersion]     = useState('')
+  const [esrganUpdating, setEsrganUpdating]   = useState(false)
+
   // Advanced
   const [width, setWidth]               = useState('')
   const [height, setHeight]             = useState('')
@@ -188,6 +202,64 @@ export default function ImageConverter() {
     } finally { setLoading(false) }
   }
 
+  // ── Upscale handlers ──
+  useEffect(() => {
+    api.image.onUpscaleSetup(({ stage }) => {
+      setUpSetupStage(stage)
+      if (stage === 'ready') setTimeout(() => setUpSetupStage(null), 1500)
+    })
+    api.image.onUpscaleProgress(p => setUpProgress(p?.percent != null ? p : null))
+  }, [])
+
+  const refreshEsrgan = useCallback(() => {
+    api.image.realesrganVersion().then(r => {
+      if (r?.installed && r?.version) setEsrganVersion(r.version)
+    }).catch(() => {})
+  }, [])
+  useEffect(refreshEsrgan, [refreshEsrgan])
+
+  const updateEsrgan = async () => {
+    setEsrganUpdating(true)
+    const r = await api.image.realesrganUpdate()
+    setEsrganUpdating(false)
+    setUpSetupStage(null)
+    if (r?.success) refreshEsrgan()
+    else alert(`Update failed: ${r?.error || 'unknown error'}`)
+  }
+
+  const handleUpBrowse = async () => {
+    const selected = await api.image.selectFiles()
+    if (selected.length) { setUpFile(selected[0]); setUpStatus('idle'); setUpPreviewAfter(null) }
+  }
+  const handleUpDrop = (e) => {
+    e.preventDefault(); e.stopPropagation(); setUpDragOver(false)
+    const paths = getDropPaths(e)
+    if (paths.length) { setUpFile(paths[0]); setUpStatus('idle'); setUpPreviewAfter(null) }
+  }
+  useEffect(() => {
+    if (!upFile) { setUpPreviewBefore(null); return }
+    api.image.readAsDataURL(upFile).then(url => setUpPreviewBefore(url)).catch(() => {})
+  }, [upFile])
+
+  const upscale = async () => {
+    if (!upFile) return
+    if (!outputDir) { alert('Please select an output folder first.'); return }
+    setLoading(true); setUpStatus('Processing…'); setUpProgress(null); setUpPreviewAfter(null)
+    try {
+      const res = await api.image.upscale({
+        filePath: upFile, outputDir, scale: upScale, model: upModel,
+        outputName: upOutputName.trim() || undefined,
+      })
+      if (res.success) {
+        setUpStatus('done')
+        const after = await api.image.readAsDataURL(res.outputPath)
+        setUpPreviewAfter(after)
+      } else setUpStatus('Error: ' + res.error)
+    } catch (err) {
+      setUpStatus('Error: ' + (err?.message || 'Failed'))
+    } finally { setLoading(false); setUpProgress(null) }
+  }
+
   const convert = async () => {
     const selectedFiles = files.filter(f => f.selected).map(f => f.path)
     if (!selectedFiles.length) return
@@ -241,6 +313,7 @@ export default function ImageConverter() {
         <div className="tabs">
           <button className={`tab-btn${tab === 'convert'   ? ' active' : ''}`} onClick={() => setTab('convert')}>Convert</button>
           <button className={`tab-btn${tab === 'removebg'  ? ' active' : ''}`} onClick={() => setTab('removebg')}>✂ Remove BG</button>
+          <button className={`tab-btn${tab === 'upscale'   ? ' active' : ''}`} onClick={() => setTab('upscale')}>⤢ Upscale</button>
           <button className={`tab-btn${tab === 'advanced'  ? ' active' : ''}`} onClick={() => setTab('advanced')}>⚙ Advanced</button>
         </div>
 
@@ -487,6 +560,139 @@ export default function ImageConverter() {
                 )}
               </div>
             )}
+          </>
+        )}
+
+        {tab === 'upscale' && (
+          <>
+            {/* Drop zone */}
+            <div
+              className={`dropzone${upDragOver ? ' drag-over' : ''}`}
+              onClick={() => !upFile && handleUpBrowse()}
+              onDragOver={e => { e.preventDefault(); setUpDragOver(true) }}
+              onDragLeave={e => { if (e.currentTarget === e.target) setUpDragOver(false) }}
+              onDrop={handleUpDrop}
+              style={{ cursor: upFile ? 'default' : 'pointer' }}
+            >
+              {upFile ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <IconImage size={20} />
+                  <span style={{ color: 'var(--accent)', fontFamily: "'Press Start 2P', monospace", fontSize: '0.5rem' }}>{basename(upFile)}</span>
+                  <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); setUpFile(''); setUpStatus('idle'); setUpPreviewBefore(null); setUpPreviewAfter(null) }}>✕</button>
+                </div>
+              ) : (
+                <>
+                  <div className="dropzone-icon">⤢</div>
+                  <div className="dropzone-title">Drop an image here or click to browse</div>
+                  <div className="dropzone-sub">AI super-resolution (Real-ESRGAN) — sharpens & enlarges, saves as PNG</div>
+                </>
+              )}
+            </div>
+
+            {/* Scale + model */}
+            <div style={{ display: 'flex', gap: 16, marginTop: 12, alignItems: 'flex-end' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Scale</label>
+                <select className="form-select" value={upScale} onChange={e => setUpScale(+e.target.value)} disabled={loading} style={{ minWidth: 90 }}>
+                  <option value={2}>2×</option>
+                  <option value={3}>3×</option>
+                  <option value={4}>4×</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Model</label>
+                <select className="form-select" value={upModel} onChange={e => setUpModel(e.target.value)} disabled={loading} style={{ minWidth: 170 }}>
+                  <option value="realesrgan-x4plus">General photo</option>
+                  <option value="realesrgan-x4plus-anime">Anime / illustration</option>
+                  <option value="realesr-animevideov3">Anime video (fast)</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label className="form-label">Output Filename <span style={{ opacity: 0.5, fontWeight: 400 }}>(optional)</span></label>
+                <input className="form-input" placeholder={upFile ? `${basename(upFile).replace(/\.[^.]+$/, '')}_x${upScale}` : 'name_x4'} value={upOutputName} onChange={e => setUpOutputName(e.target.value)} disabled={loading} />
+              </div>
+            </div>
+
+            {/* Controls row */}
+            <div className="controls-row">
+              <button className="btn btn-secondary" onClick={pickOutputDir}>📁 Output Folder</button>
+              <div style={{ flex: 1 }} />
+              <button className="btn btn-primary" onClick={upscale} disabled={!upFile || loading}>
+                {loading ? <span className="spinner">⟳</span> : '⤢'}
+                {loading ? ' Upscaling…' : ` Upscale ${upScale}×`}
+              </button>
+            </div>
+
+            {outputDir && (
+              <div className="output-path-row">
+                <span className="output-folder-icon">📂</span>
+                <span className="output-path-text">{outputDir}</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => api.shell.openPath(outputDir)}>Open ↗</button>
+              </div>
+            )}
+
+            {/* Setup progress (one-time binary download) */}
+            {upSetupStage === 'downloading' && (
+              <div className="progress-wrap">
+                <div className="progress-label"><span>Setting up Real-ESRGAN (one-time, ~50 MB)…</span></div>
+                <div className="progress-track"><div className="progress-bar progress-bar-indeterminate" style={{ width: '40%' }} /></div>
+              </div>
+            )}
+            {upSetupStage === 'extracting' && (
+              <div className="progress-wrap">
+                <div className="progress-label"><span>Unpacking engine + models…</span></div>
+                <div className="progress-track"><div className="progress-bar progress-bar-indeterminate" style={{ width: '60%' }} /></div>
+              </div>
+            )}
+
+            {/* Run progress */}
+            {loading && upSetupStage == null && (
+              <div className="progress-wrap">
+                <div className="progress-label">
+                  <span>Upscaling {upScale}×…</span>
+                  <span>{upProgress?.percent != null ? `${Math.round(upProgress.percent)}%` : ''}</span>
+                </div>
+                <div className="progress-track">
+                  {upProgress?.percent != null
+                    ? <div className="progress-bar" style={{ width: `${upProgress.percent}%` }} />
+                    : <div className="progress-bar progress-bar-indeterminate" style={{ width: '40%' }} />}
+                </div>
+              </div>
+            )}
+
+            {/* Status banner */}
+            {upStatus !== 'idle' && !loading && (
+              <div className={`result-banner ${upStatus === 'done' ? 'success' : upStatus.startsWith('Error') ? 'error' : ''}`}>
+                {upStatus === 'done' ? `✓ Upscaled ${upScale}× — PNG saved` : upStatus}
+              </div>
+            )}
+
+            {/* Before / after preview */}
+            {upPreviewBefore && (
+              <div style={{ display: 'grid', gridTemplateColumns: upPreviewAfter ? '1fr 1fr' : '1fr', gap: 12, marginTop: 12 }}>
+                <div>
+                  <div className="form-label" style={{ marginBottom: 6 }}>{upPreviewAfter ? 'Before' : 'Preview'}</div>
+                  <img src={upPreviewBefore} style={{ width: '100%', maxHeight: 250, objectFit: 'contain', border: '1px solid var(--border)', background: 'var(--bg-elevated)' }} alt="original" />
+                </div>
+                {upPreviewAfter && (
+                  <div>
+                    <div className="form-label" style={{ marginBottom: 6 }}>After ({upScale}×)</div>
+                    <img src={upPreviewAfter} style={{ width: '100%', maxHeight: 250, objectFit: 'contain', border: '1px solid var(--border)', background: 'var(--bg-elevated)' }} alt="upscaled" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Engine info */}
+            <div className="section-divider" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: 4, fontSize: 12 }}>
+              <span style={{ color: 'var(--text-muted)' }}>Real-ESRGAN:</span>
+              <span style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>{esrganVersion || 'not installed'}</span>
+              <div style={{ flex: 1 }} />
+              <button className="btn btn-secondary btn-sm" onClick={updateEsrgan} disabled={esrganUpdating} title="Re-download a clean copy of the Real-ESRGAN engine">
+                {esrganUpdating ? '⟳ Updating…' : '↑ Reinstall'}
+              </button>
+            </div>
           </>
         )}
 

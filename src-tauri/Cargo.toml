@@ -1,6 +1,6 @@
 [package]
 name = "hoggies-tool-kit"
-version = "1.0.2"
+version = "1.1.0"
 description = "Your all-in-one file conversion and utility toolkit"
 authors = ["Hoggie's Tool Kit"]
 edition = "2021"
@@ -32,6 +32,7 @@ regex-lite = "0.1"
 tokio = { version = "1", features = ["process", "io-util", "fs", "rt"] }
 flate2 = "1"
 tar = "0.4"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

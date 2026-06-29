@@ -12,6 +12,7 @@ use commands::media_commands::*;
 use commands::pdf_commands::*;
 use commands::settings_commands::*;
 use commands::stems_commands::*;
+use commands::upscale_commands::*;
 
 fn main() {
     tauri::Builder::default()
@@ -33,6 +34,9 @@ fn main() {
             image_convert,
             image_read_as_data_url,
             image_remove_bg,
+            image_upscale,
+            image_realesrgan_version,
+            image_realesrgan_update,
             // Video
             video_convert,
             // Audio
