@@ -6,22 +6,50 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-/// Resolve the bundled ffmpeg binary path.
-/// In dev mode it looks in src-tauri/resources/, in production it uses the resource dir.
-pub fn ffmpeg_path(app: &AppHandle) -> PathBuf {
-    let resource_dir = app
+/// Executable suffix for bundled binaries — Windows needs `.exe`, Unix has none.
+#[cfg(target_os = "windows")]
+const EXE_SUFFIX: &str = ".exe";
+#[cfg(not(target_os = "windows"))]
+const EXE_SUFFIX: &str = "";
+
+/// Resolve a binary bundled under `resources/`.
+///
+/// In a packaged app it lives in the Tauri resource dir. In development that dir is the
+/// build output folder, which the bundler hasn't populated, so we fall back to
+/// `src-tauri/resources/` where `npm run ffmpeg:fetch` places the binaries.
+fn bundled_binary(app: &AppHandle, name: &str) -> PathBuf {
+    let file = format!("{}{}", name, EXE_SUFFIX);
+
+    let packaged = app
         .path()
         .resource_dir()
-        .unwrap_or_else(|_| PathBuf::from("."));
-    resource_dir.join("resources").join("ffmpeg")
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("resources")
+        .join(&file);
+
+    if packaged.exists() {
+        return packaged;
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join(&file);
+        if dev.exists() {
+            return dev;
+        }
+    }
+
+    packaged
+}
+
+pub fn ffmpeg_path(app: &AppHandle) -> PathBuf {
+    bundled_binary(app, "ffmpeg")
 }
 
 pub fn ffprobe_path(app: &AppHandle) -> PathBuf {
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .unwrap_or_else(|_| PathBuf::from("."));
-    resource_dir.join("resources").join("ffprobe")
+    bundled_binary(app, "ffprobe")
 }
 
 // ── Video Convert ──────────────────────────────────────────────────────────

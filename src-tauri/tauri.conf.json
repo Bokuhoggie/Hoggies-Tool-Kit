@@ -33,7 +33,10 @@
       "icons/icon.ico",
       "icons/icon.icns"
     ],
-    "resources": [],
+    "resources": [
+      "resources/ffmpeg*",
+      "resources/ffprobe*"
+    ],
     "category": "public.app-category.utilities",
     "macOS": {
       "minimumSystemVersion": "10.15",
