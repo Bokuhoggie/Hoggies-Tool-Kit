@@ -108,11 +108,27 @@ than bundled, to keep the installer small. The established pattern (see
 every media tool depends on them and they must work offline.
 
 ## Testing
-There is currently **no test suite** — no JS test runner, no Rust `#[test]`, no CI.
+`npm test` runs the Rust suite (`cargo test`). Coverage is currently thin — checksum
+verification and filename sanitizing in `upscale_commands.rs`. There is no JS test runner
+and no CI yet.
+
 Highest-value additions, in order:
-1. Rust unit tests for pure logic (filename sanitizing, ICO building, progress parsing)
+1. More Rust unit tests for pure logic (ICO building, progress parsing, ffmpeg arg building)
 2. A smoke test that every `#[tauri::command]` in `main.rs` has a `tauriBridge.js` binding
-3. CI running `cargo check`, `cargo clippy`, and `npm run lint` on every push
+3. CI running `cargo test`, `cargo clippy`, and `npm run lint` on every push
+
+## Release builds
+
+> **`bundle_dmg.sh` fails outside a GUI session.** It shells out to `osascript` to
+> prettify the DMG's Finder window, which fails in a background shell, over SSH, or in
+> CI — the `.app` builds fine but the `.dmg` step aborts. Set `CI=true` to skip that
+> cosmetic step:
+>
+> ```
+> CI=true npm run tauri:build
+> ```
+>
+> GitHub Actions sets `CI=true` automatically, so hosted runners are unaffected.
 
 ## Known Issues / TODO
 

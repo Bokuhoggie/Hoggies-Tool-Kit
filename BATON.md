@@ -18,6 +18,11 @@ pick up cold.
 - **ffmpeg/ffprobe bundling** — `scripts/fetch-ffmpeg.mjs` fetches static builds with
   pinned SHA-256, lipo'd into universal binaries, wired into `resources` + auto-run
   before dev/build. Verified: mp3/AAC encode, ffprobe JSON, libx264/x265 present.
+  **End-to-end verified**: built a real `.dmg`, mounted it, confirmed universal
+  ffmpeg/ffprobe ship at `Contents/Resources/resources/`.
+- **Real-ESRGAN checksum pinning** — SHA-256 verified before extraction on both
+  platforms; fails closed if a pin is missing. Platform-aware binary name (`.exe`).
+- **First tests** — `npm test` (5 passing: checksum verification, sanitizing).
 
 ⚠️ **Audit findings** — full detail in [CLAUDE.md](CLAUDE.md) *Known Issues*
 - 4 tools silently broken in packaged builds (ffmpeg not bundled)
@@ -47,9 +52,9 @@ pick up cold.
 
 ### 🟢 Polish
 - [ ] **7. Cleanup** — delete 7 dead assets; `git rm --cached .claude/`, `src-tauri/gen/schemas/`
-- [ ] **8. SHA-256 pin for Real-ESRGAN** — hash already computed:
-      `e0ad05580abfeb25f8d8fb55aaf7bedf552c375b5b4d9bd3c8d59764d2cc333a`
-- [ ] **9. First Rust unit tests** — filename sanitizing, ICO building, progress parsing
+- [x] ~~**8. SHA-256 pin for Real-ESRGAN**~~ — done, both platforms
+- [~] **9. Rust unit tests** — started (5 tests). Still want: ICO building,
+      progress parsing, command↔bridge parity smoke test
 
 ### 🔵 Needs your decision
 - [ ] **10. Code signing** — $99/yr Apple Developer account (proper fix) vs shipping with
@@ -71,3 +76,9 @@ Facts established by direct testing — don't re-investigate:
 - Both Rust targets (`aarch64-apple-darwin`, `x86_64-apple-darwin`) are installed locally.
 - A `.dmg` is not an installer — it's a disk image. Universal binaries carry both
   architectures and macOS picks the slice at launch. One download serves every Mac.
+- **`npm run tauri:build` fails at the DMG step outside a GUI session** —
+  `bundle_dmg.sh` calls `osascript` to prettify the Finder window. Use
+  `CI=true npm run tauri:build`. GitHub Actions sets `CI` itself, so CI is fine.
+- Homebrew ffmpeg links 56 dylibs out of `/opt/homebrew/Cellar` — not bundleable.
+  Static builds come from `eugeneware/ffmpeg-static` (GitHub exposes SHA-256 digests
+  via `gh api …releases/latest --jq '.assets[].digest'`).

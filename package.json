@@ -17,6 +17,7 @@
     "tauri:build:mac": "tauri build --target universal-apple-darwin",
     "tauri:publish:mac": "tauri build --target universal-apple-darwin",
     "lint": "eslint .",
+    "test": "cd src-tauri && cargo test",
     "preview": "vite preview"
   },
   "dependencies": {

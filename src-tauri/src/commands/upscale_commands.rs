@@ -10,8 +10,20 @@ use tokio::process::Command;
 // The macOS asset is a .zip containing the binary plus a `models/` folder.
 const RELEASE_TAG: &str = "v0.2.5.0";
 const RELEASE_DATE: &str = "20220424";
-const RELEASE_URL: &str = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip";
 
+#[cfg(target_os = "macos")]
+const RELEASE_URL: &str = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip";
+#[cfg(target_os = "macos")]
+const RELEASE_SHA256: &str = "e0ad05580abfeb25f8d8fb55aaf7bedf552c375b5b4d9bd3c8d59764d2cc333a";
+
+#[cfg(target_os = "windows")]
+const RELEASE_URL: &str = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip";
+#[cfg(target_os = "windows")]
+const RELEASE_SHA256: &str = "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d";
+
+#[cfg(target_os = "windows")]
+const BIN_NAME: &str = "realesrgan-ncnn-vulkan.exe";
+#[cfg(not(target_os = "windows"))]
 const BIN_NAME: &str = "realesrgan-ncnn-vulkan";
 
 fn upscale_dir(app: &AppHandle) -> PathBuf {
@@ -34,6 +46,25 @@ fn models_dir(app: &AppHandle) -> PathBuf {
 
 fn version_path(app: &AppHandle) -> PathBuf {
     upscale_dir(app).join("version.txt")
+}
+
+/// Compare a downloaded payload against a pinned SHA-256, as lowercase hex.
+fn verify_sha256(bytes: &[u8], expected: &str) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+
+    if expected.is_empty() {
+        return Err("no pinned checksum for this platform — refusing to install".into());
+    }
+
+    let actual = hex::encode(Sha256::digest(bytes));
+    if actual.eq_ignore_ascii_case(expected) {
+        Ok(())
+    } else {
+        Err(format!(
+            "checksum mismatch (expected {}, got {}) — refusing to install",
+            expected, actual
+        ))
+    }
 }
 
 fn sanitize(name: &str) -> String {
@@ -115,6 +146,11 @@ async fn install_realesrgan(app: &AppHandle) -> Result<PathBuf, String> {
         .bytes()
         .await
         .map_err(|e| e.to_string())?;
+
+    // Verify the download against a pinned hash before anything is extracted or executed.
+    // We fetch a binary over the network and then run it, so this is the only thing
+    // standing between a swapped/tampered asset and arbitrary code execution.
+    verify_sha256(&bytes, RELEASE_SHA256)?;
 
     std::fs::write(&zip_path, &bytes).map_err(|e| e.to_string())?;
 
@@ -308,6 +344,42 @@ pub async fn image_realesrgan_version(app: AppHandle) -> serde_json::Value {
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| RELEASE_TAG.to_string());
     serde_json::json!({ "installed": true, "version": version })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // SHA-256 of "abc", a standard test vector.
+    const ABC_SHA: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    #[test]
+    fn accepts_matching_checksum() {
+        assert!(verify_sha256(b"abc", ABC_SHA).is_ok());
+    }
+
+    #[test]
+    fn accepts_uppercase_checksum() {
+        assert!(verify_sha256(b"abc", &ABC_SHA.to_uppercase()).is_ok());
+    }
+
+    #[test]
+    fn rejects_tampered_payload() {
+        assert!(verify_sha256(b"abd", ABC_SHA).is_err());
+    }
+
+    #[test]
+    fn rejects_empty_pin_rather_than_skipping() {
+        // An unset checksum must fail closed — never silently install unverified bytes.
+        assert!(verify_sha256(b"abc", "").is_err());
+    }
+
+    #[test]
+    fn sanitize_strips_path_separators() {
+        assert_eq!(sanitize("../../etc/passwd"), ".._.._etc_passwd");
+        assert_eq!(sanitize("a:b*c?"), "a_b_c_");
+        assert_eq!(sanitize("normal-name"), "normal-name");
+    }
 }
 
 #[tauri::command]
