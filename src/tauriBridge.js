@@ -2,7 +2,7 @@
  * Tauri Bridge — polyfills window.htk so that existing React components
  * continue to work without any changes. Replaces electron/preload.cjs.
  */
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 // Helper: subscribe to Tauri events with the same API shape as ipcRenderer.on
@@ -107,6 +107,9 @@ window.htk = {
   media: {
     waveform: (filePath) => invoke('media_waveform', { filePath }),
     clip:     (opts)     => invoke('media_clip', { args: opts }),
+    // Turn an absolute path into a URL the webview can load in <audio>/<video>/<embed>.
+    // Replaces the Electron-era `sk-media://` protocol, which had no Tauri handler.
+    fileUrl:  (filePath) => (filePath ? convertFileSrc(filePath) : ''),
   },
 
   getVersion: () => invoke('app_version'),

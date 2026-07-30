@@ -188,7 +188,8 @@ export default function ImageConverter() {
       })
       if (res.success) {
         setBgStatus('done')
-        // Load previews as data URLs (bypasses sk-media:// protocol issues)
+        // Read previews as data URLs — the output file was just written, and a data URL
+        // sidesteps any webview caching of a path we may overwrite on the next run.
         const [before, after] = await Promise.all([
           api.image.readAsDataURL(bgFile),
           api.image.readAsDataURL(res.outputPath)

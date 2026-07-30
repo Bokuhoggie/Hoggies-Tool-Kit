@@ -409,7 +409,7 @@ export default function WaveformPlayer({
   const clipStartPct = clipStart !== null && duration > 0 ? clipStart / duration : null
   const clipEndPct   = clipEnd   !== null && duration > 0 ? clipEnd   / duration : null
 
-  const mediaUrl = `sk-media://file?path=${encodeURIComponent(filePath)}`
+  const mediaUrl = api.media.fileUrl(filePath)
 
   return (
     <div
