@@ -23,6 +23,9 @@ pick up cold.
 - **Real-ESRGAN checksum pinning** — SHA-256 verified before extraction on both
   platforms; fails closed if a pin is missing. Platform-aware binary name (`.exe`).
 - **First tests** — `npm test` (5 passing: checksum verification, sanitizing).
+- **`sk-media://` → Tauri asset protocol** — `htk.media.fileUrl()` wraps
+  `convertFileSrc()`; `assetProtocol` enabled (+ `protocol-asset` cargo feature); both
+  CSPs reconciled. Fixes waveform playback (Audio/Video/Inspector) and PDF preview.
 
 ⚠️ **Audit findings** — full detail in [CLAUDE.md](CLAUDE.md) *Known Issues*
 - 4 tools silently broken in packaged builds (ffmpeg not bundled)
@@ -34,14 +37,20 @@ pick up cold.
 ## Next steps
 
 ### 🔴 Blocks release — fix first
-- [x] ~~**1. Bundle ffmpeg/ffprobe**~~ — done, see above
-- [ ] **2. Replace `sk-media://`** with Tauri `convertFileSrc` ← *next*
+- [x] ~~**1. Bundle ffmpeg/ffprobe**~~ — done, verified inside a built `.dmg`
+- [x] ~~**2. Replace `sk-media://`**~~ — done. ⚠️ *Code-complete but the UI path was
+      never clicked through:* confirm a waveform actually renders + plays, and that the
+      inspector PDF preview loads. Everything around it is verified (asset protocol
+      compiled in, CSPs allow `asset:`, app launches clean).
       `src/components/WaveformPlayer.jsx:412`, `src/pages/FileInspector.jsx:295`
       *Unblocks: waveform playback, inspector media preview.*
-- [ ] **3. Fix CSP + self-host fonts**
-      `index.html` (meta CSP) vs `src-tauri/tauri.conf.json` (`app.security.csp`) disagree;
-      neither allows `fonts.googleapis.com`, imported at `src/index.css:1`.
-      *Fixes packaged-build styling and makes the "100% LOCAL" claim true.*
+- [ ] **3. Self-host fonts** ← *next*
+      The two CSPs are now reconciled (done as part of #2) and both currently allow
+      `fonts.googleapis.com` / `fonts.gstatic.com` so nothing regressed. Remaining work:
+      vendor Press Start 2P / VT323 / Inter locally, drop the `@import` at
+      `src/index.css:1`, then remove the Google allowances from **both** CSPs.
+      *Makes the "100% LOCAL / NO UPLOADS" claim true and removes a launch-time network
+      dependency for the pixel fonts.*
 
 ### 🟡 Unify
 - [ ] **4. Platform abstraction** — `#[cfg(target_os)]` constants for binary names,
