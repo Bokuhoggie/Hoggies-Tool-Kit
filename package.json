@@ -9,6 +9,7 @@
     "build": "vite build",
     "tauri": "tauri",
     "ffmpeg:fetch": "node scripts/fetch-ffmpeg.mjs",
+    "fonts:fetch": "node scripts/fetch-fonts.mjs",
     "pretauri:dev": "npm run ffmpeg:fetch",
     "tauri:dev": "tauri dev",
     "pretauri:build": "npm run ffmpeg:fetch",

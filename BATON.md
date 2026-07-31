@@ -44,13 +44,10 @@ pick up cold.
       compiled in, CSPs allow `asset:`, app launches clean).
       `src/components/WaveformPlayer.jsx:412`, `src/pages/FileInspector.jsx:295`
       *Unblocks: waveform playback, inspector media preview.*
-- [ ] **3. Self-host fonts** ← *next*
-      The two CSPs are now reconciled (done as part of #2) and both currently allow
-      `fonts.googleapis.com` / `fonts.gstatic.com` so nothing regressed. Remaining work:
-      vendor Press Start 2P / VT323 / Inter locally, drop the `@import` at
-      `src/index.css:1`, then remove the Google allowances from **both** CSPs.
-      *Makes the "100% LOCAL / NO UPLOADS" claim true and removes a launch-time network
-      dependency for the pixel fonts.*
+- [x] ~~**3. Self-host fonts**~~ — done. Latin woff2 subsets vendored in
+      `src/assets/fonts/` (59 KB total, SIL OFL, committed); `npm run fonts:fetch`
+      refreshes them. Google allowances removed from **both** CSPs. Verified: fonts are
+      embedded in the release binary and zero `fonts.g*` URLs remain in it.
 
 ### 🟡 Unify
 - [ ] **4. Platform abstraction** — `#[cfg(target_os)]` constants for binary names,
@@ -66,10 +63,11 @@ pick up cold.
       progress parsing, command↔bridge parity smoke test
 
 ### 🔵 Needs your decision
-- [ ] **10. Code signing** — $99/yr Apple Developer account (proper fix) vs shipping with
-      "Open Anyway" instructions. Currently `signingIdentity: null`, so Gatekeeper blocks
-      first launch; macOS 15 removed the right-click→Open bypass.
-      *This is the only true blocker on public distribution.*
+- [ ] **10. Code signing** — **planned, pending funds.** Apple Developer account ($99/yr),
+      then set `signingIdentity` + notarize. Until then the README documents the
+      "Open Anyway" workaround (macOS 15 removed the right-click→Open bypass).
+      When the account lands, certs go in **GitHub Secrets** so CI signs during the build
+      and they never sit on a laptop.
 
 ---
 

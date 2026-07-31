@@ -133,25 +133,20 @@ Highest-value additions, in order:
 ## Known Issues / TODO
 
 ### Blocking release
-- [ ] **ffmpeg/ffprobe are not bundled.** `resources/` holds only `.gitkeep` and
-      `tauri.conf.json` has `"resources": []`, but `media_commands.rs` resolves ffmpeg
-      *only* at `resource_dir/resources/ffmpeg` with no PATH fallback. Video conversion,
-      audio conversion, waveform, clip, and the downloader's merge step all fail in a
-      packaged build.
-- [ ] **`sk-media://` protocol is dead.** `WaveformPlayer.jsx` and `FileInspector.jsx`
-      still build `sk-media://file?path=…` URLs, but no handler is registered in Rust
-      (it was an Electron-era protocol). Waveform playback and inspector media preview
-      are broken. Either register a Tauri URI scheme or switch to `convertFileSrc`/data URLs.
-- [ ] **CSP mismatch.** `index.html` declares a meta CSP referencing `htk-media:` while
-      `tauri.conf.json` declares a different one allowing `asset:`. Neither permits
-      `fonts.googleapis.com`, which `src/index.css` imports on line 1 — the pixel fonts
-      may not load in a packaged build.
 - [ ] **Not code-signed or notarized** (`signingIdentity: null`). Gatekeeper blocks first
-      launch on macOS; Sequoia removed the right-click→Open bypass.
+      launch on macOS; Sequoia removed the right-click→Open bypass. *Planned — pending an
+      Apple Developer account.*
+
+### Recently fixed (kept for context)
+- [x] **ffmpeg/ffprobe now bundled** via `npm run ffmpeg:fetch` (pinned SHA-256, lipo'd
+      universal on macOS). Binaries are gitignored; the fetch runs before dev/build.
+- [x] **`sk-media://` replaced** by the Tauri asset protocol behind `htk.media.fileUrl()`.
+- [x] **CSPs reconciled.** `index.html` and `tauri.conf.json` are now a matched pair —
+      browsers apply the *intersection*, so both must allow a directive for it to work.
+- [x] **Fonts self-hosted** in `src/assets/fonts/` (latin woff2, SIL OFL). No remote
+      origins remain in either CSP.
 
 ### Polish
-- [ ] `index.css` fetches Google Fonts remotely, which contradicts the "100% LOCAL /
-      NO UPLOADS" claim on the home screen. Self-host the fonts.
 - [ ] Dead assets: `swiss_knife_logo_red_white_*.png` (root), `src/assets/hero.png`,
       `src/assets/react.svg`, `src/assets/vite.svg`, `public/icons.svg`,
       `public/favicon.svg`, `public/icon.ico` — all unreferenced.

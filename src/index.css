@@ -1,4 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Inter:wght@400;500;600&display=swap');
+/* ============================================
+   FONTS — self-hosted (latin subset, woff2)
+   --------------------------------------------
+   Vendored rather than pulled from Google's CDN so the app renders correctly
+   offline, needs no network at launch, and genuinely honours the "100% LOCAL /
+   NO UPLOADS" promise on the home screen. All three families are SIL OFL 1.1;
+   see assets/fonts/OFL.txt. Refresh with `npm run fonts:fetch`.
+   ============================================ */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/press-start-2p-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/vt323-latin.woff2') format('woff2');
+}
+/* Inter ships as a variable font — one file covers the whole 100–900 range. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin.woff2') format('woff2');
+}
 
 /* ============================================
    DESIGN TOKENS — 8-BIT ARCADE EDITION

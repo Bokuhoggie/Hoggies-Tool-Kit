@@ -6,9 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- Kept in sync with `app.security.csp` in src-tauri/tauri.conf.json. Browsers apply
        the intersection of every CSP present, so a directive missing here is blocked even
-       if Tauri allows it. `asset:` / `asset.localhost` back convertFileSrc(). -->
+       if Tauri allows it. `asset:` / `asset.localhost` back convertFileSrc(). No remote
+       origins are permitted — fonts are self-hosted and nothing else loads off-device. -->
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost blob:; object-src 'self' asset: http://asset.localhost https://asset.localhost; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'" />
+    content="default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost blob:; object-src 'self' asset: http://asset.localhost https://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' 'unsafe-inline'" />
   <title>Hoggie's Tool Kit — File & Conversion Toolkit</title>
   <meta name="description"
     content="All-in-one file conversion, video downloading, and utility toolkit. Private, fast, and offline." />
