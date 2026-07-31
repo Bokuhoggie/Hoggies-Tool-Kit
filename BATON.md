@@ -6,6 +6,9 @@ pick up cold.
 **Last updated:** 2026-06-20
 **Branch:** `mac-rust` · **Version:** 1.1.0 · **Target:** unify to `master`, ship both platforms
 
+> **All three release-blocking bugs are fixed.** What remains is unification (#4–#6),
+> more tests (#9), and code signing (#10, pending an Apple Developer account).
+
 ---
 
 ## Where things stand
@@ -57,7 +60,8 @@ pick up cold.
       build both installers on tag push
 
 ### 🟢 Polish
-- [ ] **7. Cleanup** — delete 7 dead assets; `git rm --cached .claude/`, `src-tauri/gen/schemas/`
+- [x] ~~**7. Cleanup**~~ — 7 dead assets deleted (348 KB); `.claude/` and
+      `src-tauri/gen/schemas/` untracked + ignored. Working tree is clean.
 - [x] ~~**8. SHA-256 pin for Real-ESRGAN**~~ — done, both platforms
 - [~] **9. Rust unit tests** — started (5 tests). Still want: ICO building,
       progress parsing, command↔bridge parity smoke test
