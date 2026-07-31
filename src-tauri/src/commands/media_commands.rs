@@ -6,19 +6,13 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-/// Executable suffix for bundled binaries — Windows needs `.exe`, Unix has none.
-#[cfg(target_os = "windows")]
-const EXE_SUFFIX: &str = ".exe";
-#[cfg(not(target_os = "windows"))]
-const EXE_SUFFIX: &str = "";
-
 /// Resolve a binary bundled under `resources/`.
 ///
 /// In a packaged app it lives in the Tauri resource dir. In development that dir is the
 /// build output folder, which the bundler hasn't populated, so we fall back to
 /// `src-tauri/resources/` where `npm run ffmpeg:fetch` places the binaries.
 fn bundled_binary(app: &AppHandle, name: &str) -> PathBuf {
-    let file = format!("{}{}", name, EXE_SUFFIX);
+    let file = super::platform::exe_name(name);
 
     let packaged = app
         .path()

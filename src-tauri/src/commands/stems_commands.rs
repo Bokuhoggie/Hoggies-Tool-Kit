@@ -6,8 +6,21 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+// demucs-rs publishes a per-platform archive, and the container format differs:
+// macOS is a gzipped tarball, Windows a zip. Both contain a single `demucs` binary.
+#[cfg(target_os = "macos")]
 const RELEASE_URL: &str =
     "https://github.com/nikhilunni/demucs-rs/releases/latest/download/demucs-aarch64-apple-darwin.tar.gz";
+#[cfg(target_os = "windows")]
+const RELEASE_URL: &str =
+    "https://github.com/nikhilunni/demucs-rs/releases/latest/download/demucs-x86_64-pc-windows-msvc.zip";
+
+/// Local filename for the downloaded archive, matching its container format.
+#[cfg(target_os = "macos")]
+const ARCHIVE_NAME: &str = "demucs.tar.gz";
+#[cfg(target_os = "windows")]
+const ARCHIVE_NAME: &str = "demucs.zip";
+
 const LATEST_RELEASE_API: &str =
     "https://api.github.com/repos/nikhilunni/demucs-rs/releases/latest";
 
@@ -22,7 +35,27 @@ fn demucs_dir(app: &AppHandle) -> PathBuf {
 }
 
 fn demucs_path(app: &AppHandle) -> PathBuf {
-    demucs_dir(app).join("demucs")
+    demucs_dir(app).join(super::platform::exe_name("demucs"))
+}
+
+/// Unpack the downloaded archive into `dir`, handling each platform's container format.
+fn extract_archive(archive: &Path, dir: &Path) -> Result<(), String> {
+    let f = std::fs::File::open(archive).map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let gz = flate2::read::GzDecoder::new(f);
+        tar::Archive::new(gz)
+            .unpack(dir)
+            .map_err(|e| format!("extract failed: {}", e))
+    }
+    #[cfg(target_os = "windows")]
+    {
+        zip::ZipArchive::new(f)
+            .map_err(|e| format!("bad zip: {}", e))?
+            .extract(dir)
+            .map_err(|e| format!("extract failed: {}", e))
+    }
 }
 
 fn version_path(app: &AppHandle) -> PathBuf {
@@ -56,7 +89,7 @@ async fn ensure_demucs(app: &AppHandle) -> Result<PathBuf, String> {
     let _ = app.emit("stems:setup", serde_json::json!({ "stage": "downloading" }));
 
     let dir = demucs_dir(app);
-    let tar_path = dir.join("demucs.tar.gz");
+    let tar_path = dir.join(ARCHIVE_NAME);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(180))
@@ -78,28 +111,20 @@ async fn ensure_demucs(app: &AppHandle) -> Result<PathBuf, String> {
 
     let _ = app.emit("stems:setup", serde_json::json!({ "stage": "extracting" }));
 
-    // Extract — the tarball contains a single binary named "demucs"
-    let f = std::fs::File::open(&tar_path).map_err(|e| e.to_string())?;
-    let gz = flate2::read::GzDecoder::new(f);
-    let mut archive = tar::Archive::new(gz);
-    archive.unpack(&dir).map_err(|e| format!("extract failed: {}", e))?;
+    // Extract — the archive contains a single binary named "demucs"
+    extract_archive(&tar_path, &dir)?;
 
     // Locate the binary — flatten in case it's nested in a folder
     let bin_target = bin.clone();
     if !bin_target.exists() {
-        if let Some(found) = find_binary(&dir, "demucs") {
+        if let Some(found) = find_binary(&dir, &super::platform::exe_name("demucs")) {
             std::fs::rename(&found, &bin_target).map_err(|e| e.to_string())?;
         } else {
             return Err("demucs binary not found in archive".into());
         }
     }
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&bin_target, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
+    super::platform::make_executable(&bin_target)?;
 
     let _ = std::fs::remove_file(&tar_path);
 

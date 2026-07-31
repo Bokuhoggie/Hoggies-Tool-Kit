@@ -8,13 +8,21 @@ use tokio::process::Command;
 
 use super::media_commands::ffmpeg_path;
 
+// yt-dlp ships a per-platform single-file build. macOS gets the universal binary; on
+// Windows it's a plain .exe. Both are pulled from the "latest" release, so no checksum
+// is pinned here — see the note in ensure_yt_dlp.
+#[cfg(target_os = "macos")]
+const YT_DLP_URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
+#[cfg(target_os = "windows")]
+const YT_DLP_URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+
 fn yt_dlp_path(app: &AppHandle) -> PathBuf {
     let data_dir = app
         .path()
         .app_data_dir()
         .unwrap_or_else(|_| PathBuf::from("."));
     std::fs::create_dir_all(&data_dir).ok();
-    data_dir.join("yt-dlp")
+    data_dir.join(super::platform::exe_name("yt-dlp"))
 }
 
 async fn ensure_yt_dlp(app: &AppHandle) -> Result<PathBuf, String> {
@@ -25,11 +33,15 @@ async fn ensure_yt_dlp(app: &AppHandle) -> Result<PathBuf, String> {
 
     let _ = app.emit("downloader:setup", serde_json::json!({ "stage": "downloading" }));
 
-    // Download yt-dlp from GitHub releases (macOS universal binary)
-    // Write to a temp file first, then rename atomically to prevent races
-    // when two concurrent calls both see path.exists() == false.
+    // Download yt-dlp from GitHub releases. Write to a temp file first, then rename
+    // atomically to prevent races when two concurrent calls both see exists() == false.
+    //
+    // NOTE: this tracks the "latest" release rather than a pinned tag, so there is no
+    // checksum to verify against — unlike Real-ESRGAN, which is pinned. yt-dlp has to
+    // stay current to keep working against sites that change constantly, and pinning it
+    // would break the downloader within weeks.
     let tmp_path = path.with_extension("tmp");
-    let url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
+    let url = YT_DLP_URL;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -47,13 +59,7 @@ async fn ensure_yt_dlp(app: &AppHandle) -> Result<PathBuf, String> {
     let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
     std::fs::write(&tmp_path, &bytes).map_err(|e| e.to_string())?;
 
-    // chmod +x on macOS
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
+    super::platform::make_executable(&tmp_path)?;
 
     // Atomic rename into place
     std::fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;

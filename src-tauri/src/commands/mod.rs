@@ -5,6 +5,7 @@ pub mod image_commands;
 pub mod inspector_commands;
 pub mod media_commands;
 pub mod pdf_commands;
+pub mod platform;
 pub mod settings_commands;
 pub mod stems_commands;
 pub mod upscale_commands;

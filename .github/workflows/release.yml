@@ -1,0 +1,82 @@
+name: Release
+
+# Builds the macOS and Windows installers from the same commit and attaches them to a
+# draft GitHub Release. A .dmg can only be produced on macOS and a .msi only on Windows,
+# so this matrix rents one runner of each — that's a *build* concern, not a reason to
+# fork the source. See CLAUDE.md → "Branch Strategy".
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: universal-apple-darwin
+            args: --target universal-apple-darwin
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # The macOS job builds a universal binary, so it needs both slices.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.target }}
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ffmpeg/ffprobe are bundled but never committed. This fetches them with a pinned
+      # SHA-256 and, on macOS, lipos the two arches into a universal binary.
+      - name: Fetch ffmpeg
+        run: npm run ffmpeg:fetch
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      # CI=true is required on macOS: bundle_dmg.sh shells out to osascript to prettify
+      # the DMG's Finder window, which fails on a headless runner. GitHub sets CI itself,
+      # but it's set explicitly here so the behaviour is obvious.
+      - name: Build
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Hoggie''s Tool Kit ${{ github.ref_name }}'
+          releaseBody: |
+            See the assets below to download and install.
+
+            **macOS:** HTK is not yet notarized, so Gatekeeper will block the first
+            launch. Open **System Settings → Privacy & Security** and click
+            **Open Anyway**. (macOS 15 removed the old right-click → Open bypass.)
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

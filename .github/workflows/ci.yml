@@ -1,0 +1,62 @@
+name: CI
+
+# Fast checks on every push/PR. This is what catches a change that compiles on macOS but
+# breaks Windows — the failure mode that let the old platform forks drift 22 commits apart.
+
+on:
+  push:
+    branches: [master, mac-rust]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (JS)
+        run: npm run lint
+
+      - name: Clippy (Rust)
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test (Rust)
+        working-directory: src-tauri
+        run: cargo test
+
+      # Type-checks the whole tree for this platform without producing an installer —
+      # cheap proof that the #[cfg] branches in commands/platform.rs stay valid on both.
+      - name: Check
+        working-directory: src-tauri
+        run: cargo check --all-targets

@@ -219,18 +219,18 @@ pub async fn inspector_analyze(app: AppHandle, file_path: String) -> FileAnalysi
     let modified = stat
         .modified()
         .ok()
-        .and_then(|t| {
+        .map(|t| {
             let dt: chrono::DateTime<chrono::Local> = t.into();
-            Some(dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            dt.format("%Y-%m-%d %H:%M:%S").to_string()
         })
         .unwrap_or_else(|| "—".into());
 
     let created = stat
         .created()
         .ok()
-        .and_then(|t| {
+        .map(|t| {
             let dt: chrono::DateTime<chrono::Local> = t.into();
-            Some(dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            dt.format("%Y-%m-%d %H:%M:%S").to_string()
         })
         .unwrap_or_else(|| "—".into());
 

@@ -178,12 +178,7 @@ async fn install_realesrgan(app: &AppHandle) -> Result<PathBuf, String> {
     std::fs::rename(&found_bin, &bin).map_err(|e| e.to_string())?;
     std::fs::rename(&found_models, &md).map_err(|e| e.to_string())?;
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
+    super::platform::make_executable(&bin)?;
 
     let _ = std::fs::remove_dir_all(&staging);
     let _ = std::fs::write(version_path(app), format!("{} ({})", RELEASE_TAG, RELEASE_DATE));
