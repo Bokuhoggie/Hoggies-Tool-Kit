@@ -4,10 +4,14 @@ Working state and next steps. Update this as work lands so any session (or perso
 pick up cold.
 
 **Last updated:** 2026-06-20
-**Branch:** `mac-rust` · **Version:** 1.1.0 · **Target:** unify to `master`, ship both platforms
+**Branch:** `master` (unified) · **Version:** 1.1.0
 
-> **All three release-blocking bugs are fixed.** What remains is unification (#4–#6),
+> **All three release-blocking bugs are fixed and the unify is done.** `master` is now the
+> single cross-platform source of truth. What remains: push + let CI verify Windows,
 > more tests (#9), and code signing (#10, pending an Apple Developer account).
+
+> ⚠️ **Nothing has been pushed yet.** `master` is 64 commits ahead of `origin/master`
+> locally. Push when you're ready — that's also what first runs the Windows CI job.
 
 ---
 
@@ -53,11 +57,17 @@ pick up cold.
       embedded in the release binary and zero `fonts.g*` URLs remain in it.
 
 ### 🟡 Unify
-- [ ] **4. Platform abstraction** — `#[cfg(target_os)]` constants for binary names,
-      download URLs, checksums, `chmod`
-- [ ] **5. Merge `mac-rust` → `master`**, retire `win-rust` / `mac-dev` / `win-dev`
-- [ ] **6. CI matrix** (`.github/workflows/release.yml`) — `macos-latest` + `windows-latest`
-      build both installers on tag push
+- [x] ~~**4. Platform abstraction**~~ — `commands/platform.rs` (`EXE_SUFFIX`, `exe_name`,
+      `make_executable`). yt-dlp, demucs, Real-ESRGAN and ffmpeg all cfg'd per OS.
+      demucs also needed cfg'd *extraction* (macOS `.tar.gz` vs Windows `.zip`).
+      ⚠️ **Windows branches are unverified locally** — cross-checking from macOS needs
+      `llvm-rc` (required by `tauri-winres`), which macOS lacks. CI is their first compile.
+- [x] ~~**5. Merge to `master`**~~ — clean fast-forward; `mac-rust` was a strict superset
+      (64 ahead, 0 behind). Verified `master` passes lint + clippy + tests.
+      Still to do: delete the stale `win-rust` / `mac-dev` / `win-dev` remote branches.
+- [x] ~~**6. CI matrix**~~ — `.github/workflows/ci.yml` (lint + clippy `-D warnings` +
+      tests on macOS **and** Windows, every push/PR) and `release.yml` (tag push → draft
+      release with the universal `.dmg` and the `.msi`).
 
 ### 🟢 Polish
 - [x] ~~**7. Cleanup**~~ — 7 dead assets deleted (348 KB); `.claude/` and
