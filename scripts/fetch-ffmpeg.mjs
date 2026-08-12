@@ -54,13 +54,46 @@ function sha256(buf) {
   return createHash('sha256').update(buf).digest('hex')
 }
 
+/** Flatten a fetch failure into something diagnosable — Node hides the real reason in `cause`. */
+function describe(err) {
+  const parts = [err.message]
+  let cause = err.cause
+  while (cause) {
+    parts.push(cause.code ? `${cause.code}: ${cause.message}` : cause.message)
+    cause = cause.cause
+  }
+  return parts.filter(Boolean).join(' — ')
+}
+
+/**
+ * Fetch with retries. These are ~45-80 MB downloads from a CDN, and a transient reset
+ * shouldn't fail an entire CI run, so back off and try again rather than giving up.
+ */
+async function fetchWithRetry(url, attempts = 4) {
+  let lastErr
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const res = await fetch(url, { redirect: 'follow' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res
+    } catch (err) {
+      lastErr = err
+      if (i < attempts) {
+        const wait = 2 ** i * 1000
+        process.stdout.write(`retry ${i}/${attempts - 1} after ${describe(err)} … `)
+        await new Promise((r) => setTimeout(r, wait))
+      }
+    }
+  }
+  throw new Error(`could not download after ${attempts} attempts — ${describe(lastErr)}`)
+}
+
 async function download(asset) {
   const expected = CHECKSUMS[asset]
   if (!expected) throw new Error(`No pinned checksum for ${asset}`)
 
   process.stdout.write(`  ↓ ${asset} … `)
-  const res = await fetch(`${BASE}/${asset}`, { redirect: 'follow' })
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${asset}`)
+  const res = await fetchWithRetry(`${BASE}/${asset}`)
 
   const buf = Buffer.from(await res.arrayBuffer())
   const actual = sha256(buf)
@@ -123,6 +156,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(`\n✗ ${err.message}`)
+  console.error(`\n✗ ${describe(err)}`)
   process.exit(1)
 })
