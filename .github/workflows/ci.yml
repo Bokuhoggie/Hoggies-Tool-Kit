@@ -48,6 +48,12 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      # Required before ANY cargo command, not just a bundle: tauri-build resolves the
+      # `resources` globs from tauri.conf.json inside build.rs, and fails the build script
+      # outright if they match nothing. Without this, even `cargo clippy` cannot run.
+      - name: Fetch ffmpeg
+        run: npm run ffmpeg:fetch
+
       - name: Lint (JS)
         run: npm run lint
 
