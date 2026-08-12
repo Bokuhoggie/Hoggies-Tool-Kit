@@ -10,8 +10,9 @@ pick up cold.
 > single cross-platform source of truth. What remains: push + let CI verify Windows,
 > more tests (#9), and code signing (#10, pending an Apple Developer account).
 
-> ⚠️ **Nothing has been pushed yet.** `master` is 64 commits ahead of `origin/master`
-> locally. Push when you're ready — that's also what first runs the Windows CI job.
+> ✅ **Pushed, and CI is green on macOS *and* Windows.** The Windows job compiling clean
+> is the first time this codebase has ever built for Windows — the unify is verified, not
+> just asserted.
 
 ---
 
@@ -60,8 +61,8 @@ pick up cold.
 - [x] ~~**4. Platform abstraction**~~ — `commands/platform.rs` (`EXE_SUFFIX`, `exe_name`,
       `make_executable`). yt-dlp, demucs, Real-ESRGAN and ffmpeg all cfg'd per OS.
       demucs also needed cfg'd *extraction* (macOS `.tar.gz` vs Windows `.zip`).
-      ⚠️ **Windows branches are unverified locally** — cross-checking from macOS needs
-      `llvm-rc` (required by `tauri-winres`), which macOS lacks. CI is their first compile.
+      ✅ **Verified by the windows-latest CI job** — clippy `-D warnings` + tests pass.
+      (Can't be cross-checked from macOS: `tauri-winres` needs `llvm-rc`.)
 - [x] ~~**5. Merge to `master`**~~ — clean fast-forward; `mac-rust` was a strict superset
       (64 ahead, 0 behind). Verified `master` passes lint + clippy + tests.
       Still to do: delete the stale `win-rust` / `mac-dev` / `win-dev` remote branches.
@@ -73,8 +74,16 @@ pick up cold.
 - [x] ~~**7. Cleanup**~~ — 7 dead assets deleted (348 KB); `.claude/` and
       `src-tauri/gen/schemas/` untracked + ignored. Working tree is clean.
 - [x] ~~**8. SHA-256 pin for Real-ESRGAN**~~ — done, both platforms
-- [~] **9. Rust unit tests** — started (5 tests). Still want: ICO building,
+- [~] **9. Rust unit tests** — started (7 tests). Still want: ICO building,
       progress parsing, command↔bridge parity smoke test
+- [ ] **11. Three latent React bugs in `HtkWidget.jsx`** (~line 534-537), surfaced when a
+      lockfile regen briefly pulled a newer `eslint-plugin-react-hooks`:
+      a value from `useState()` is mutated directly, and `setState` is called
+      synchronously inside an effect (cascading renders). Invisible with the currently
+      pinned plugin, real regardless. Fix before bumping that plugin.
+- [ ] **12. Revisit `npm ci`** — CI uses `npm install` because the local npm (11.6.2)
+      and the runners' npm disagree about optional `@emnapi` packages in the lock file.
+      Switch back once the versions converge.
 
 ### 🔵 Needs your decision
 - [ ] **10. Code signing** — **planned, pending funds.** Apple Developer account ($99/yr),
