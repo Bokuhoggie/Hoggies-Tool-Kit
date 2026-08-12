@@ -41,8 +41,12 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # `npm install`, not `npm ci`. The lock file is generated locally by npm 11.6.x,
+      # which does not record the optional @emnapi WASM-fallback packages that newer npm
+      # versions on the runners expect — so `npm ci` fails the in-sync check through no
+      # fault of the tree. Revisit once the local and runner npm versions converge.
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Lint (JS)
         run: npm run lint

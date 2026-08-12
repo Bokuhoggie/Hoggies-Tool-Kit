@@ -46,8 +46,10 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # See the note in ci.yml — `npm ci` rejects our lock file due to npm version skew
+      # over optional @emnapi packages, not an actual dependency problem.
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       # ffmpeg/ffprobe are bundled but never committed. This fetches them with a pinned
       # SHA-256 and, on macOS, lipos the two arches into a universal binary.
