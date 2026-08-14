@@ -43,7 +43,19 @@ npm run lint                   # ESLint
 - **Rust** (stable) via rustup; for universal macOS builds:
   `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
 - **Node.js** v18+
-- Xcode Command Line Tools (macOS) / MSVC build tools (Windows)
+- Xcode Command Line Tools (macOS) / MSVC build tools + WebView2 runtime (Windows)
+
+> **Windows: never check out into a path containing an apostrophe.** `tauri-winres`
+> escapes `'` as `\'` when it generates `resource.rc`, and RC.EXE then can't resolve the
+> icon path — `error RC2135: file not found: …\Hoggie\'s Tool Kit\…\icon.ico`. It fails in
+> the build script, before any app code compiles. Building through a junction at a clean
+> path does *not* help; tauri-build canonicalizes the icon to its physical location.
+> Use `…\Hoggies-Tool-Kit\`. CI is unaffected only because runners check out to
+> `D:\a\Hoggies-Tool-Kit\Hoggies-Tool-Kit`.
+
+> **`npm run ffmpeg:fetch` is required before *any* cargo command** — not just a bundle.
+> `tauri-build` resolves the `resources` globs from `tauri.conf.json` inside `build.rs`
+> and hard-fails if they match nothing, so even `cargo clippy` can't run without it.
 
 ## Project Structure
 ```
@@ -109,15 +121,29 @@ every media tool depends on them and they must work offline.
 
 ## Testing
 `npm test` runs the Rust suite (`cargo test`). Coverage is currently thin — checksum
-verification and filename sanitizing in `upscale_commands.rs`. There is no JS test runner
-and no CI yet.
+verification and filename sanitizing in `upscale_commands.rs`, plus `platform.rs`. There
+is no JS test runner.
+
+CI (`.github/workflows/ci.yml`) runs lint + `clippy -D warnings` + `cargo test` +
+`cargo check` on **macOS and Windows** for every push and PR. Note what it does *not* do:
+it never bundles. Packaging bugs — anything in `tauri.conf.json`'s `bundle` block — get
+through CI untouched, so they have to be caught by building an installer by hand.
 
 Highest-value additions, in order:
 1. More Rust unit tests for pure logic (ICO building, progress parsing, ffmpeg arg building)
 2. A smoke test that every `#[tauri::command]` in `main.rs` has a `tauriBridge.js` binding
-3. CI running `cargo test`, `cargo clippy`, and `npm run lint` on every push
 
 ## Release builds
+
+> **Keep ASCII apostrophes out of `productName`.** It is currently `"Hoggie’s Tool Kit"`
+> with U+2019, and that is deliberate. An ASCII `'` breaks the Windows build two ways:
+> NSIS treats it as a string delimiter and dies with
+> `macro "NSISCOMCALL" requires 4 parameter(s), passed 8!`, and tauri-winres escapes it
+> into the version info so the shipped `.exe` reports `Hoggie\'s Tool Kit` in
+> Properties → Details. The `.msi` builds either way — only NSIS fails — so a release can
+> lose half its Windows artifacts while looking fine. U+2019 avoids both and is the
+> correct apostrophe anyway. The in-app window `title` is unaffected; it never reaches a
+> packager.
 
 > **`bundle_dmg.sh` fails outside a GUI session.** It shells out to `osascript` to
 > prettify the DMG's Finder window, which fails in a background shell, over SSH, or in
@@ -147,11 +173,51 @@ Highest-value additions, in order:
       origins remain in either CSP.
 
 ### Polish
-- [ ] Dead assets: `swiss_knife_logo_red_white_*.png` (root), `src/assets/hero.png`,
-      `src/assets/react.svg`, `src/assets/vite.svg`, `public/icons.svg`,
-      `public/favicon.svg`, `public/icon.ico` — all unreferenced.
-- [ ] `.claude/settings.local.json` is tracked despite `.gitignore` listing `.claude`
-      (`git rm --cached` it).
-- [ ] `src-tauri/gen/schemas/` is generated output but tracked in git.
-- [ ] `useSettings.js` docblock still says "backed by electron IPC".
+- [x] ~~Dead assets, tracked `.claude/`, tracked `src-tauri/gen/schemas/`~~ — all cleaned
+      up; verified absent from the working tree and the index.
+- [x] ~~`useSettings.js` docblock said "backed by electron IPC"~~ — now names the Tauri bridge.
 - [ ] Test auto-updater with `tauri-plugin-updater` (currently stubbed in `tauriBridge.js`).
+- [ ] `.title-bar` reserves `padding-left: 80px` for macOS traffic lights, but the window
+      is `decorations: false` on both platforms, so it's dead space on Windows. Cosmetic —
+      confirm against a running macOS build before changing it.
+
+## Arbor — the project library
+
+[Arbor](http://timone:3003) is the developer portal on **timone**: project
+timelines, handoff records ("batons"), and the documentation for every project
+across all three machines. It is reachable over Tailscale only.
+
+**This project is `htk` in Arbor.**
+
+Its code is **not** cloned on timone, so its documentation lives in Arbor's own
+storage rather than in this repo. Arbor is the canonical copy — if you write a
+design note or a plan, put it there, not in a loose markdown file here.
+
+### Reading it
+
+If you have the Arbor MCP server configured, use `arbor_search` / `arbor_read_doc`
+and you are done. Otherwise, over HTTP:
+
+```bash
+export ARBOR_TOKEN=$(ssh timone@timone "grep '^ARBOR_TOKEN=' ~/arbor/.env | cut -d= -f2-")
+curl -s -G -H "x-arbor-token: $ARBOR_TOKEN" \
+  --data-urlencode "q=notarization" http://timone:3003/api/search
+```
+
+**Search Arbor before reconstructing history from `git log`.** Decisions and
+plans are written down there; the commit log records what changed, not why.
+
+### Writing to it
+
+Documents are **standalone HTML**. Send only the body — no `<!doctype>`, `<html>`,
+`<head>`, `<style>` or `<title>`; Arbor wraps it and renders the title itself.
+Start headings at `h2`. Scripts and inline styles are stripped server-side.
+
+`CLAUDE.md`, `AGENTS.md` and `README.md` are never converted and never writable
+through the API — coding agents and GitHub read those, so they stay markdown.
+**This file is one of them: edit it here, on disk.**
+
+Writing a document **overwrites** it. Read it first and merge, or you will
+replace work you never saw.
+
+Full API and conventions: `~/arbor/AGENTS.md` on timone.

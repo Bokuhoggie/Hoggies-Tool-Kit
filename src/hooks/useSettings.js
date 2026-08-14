@@ -1,5 +1,5 @@
 /**
- * useSettings — shared settings hook backed by electron IPC.
+ * useSettings — shared settings hook backed by the Tauri bridge (`window.htk.settings`).
  *
  * Module-level cache means only one IPC read call ever happens per session,
  * regardless of how many components call useSettings(). All subscribers

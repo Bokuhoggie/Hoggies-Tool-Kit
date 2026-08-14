@@ -5,6 +5,17 @@ const QUALITIES  = ['1080p', '720p', '480p', '360p']
 const AFORMATS   = ['mp3', 'aac', 'flac', 'opus', 'wav']
 const api = window.htk
 
+// Cookie sources yt-dlp can read, minus the ones that can't exist on this OS.
+// Safari is macOS-only; offering it on Windows just produces a yt-dlp error.
+const IS_WINDOWS = navigator.userAgent.includes('Windows')
+const COOKIE_BROWSERS = [
+  ['chrome',  'Chrome'],
+  ['firefox', 'Firefox'],
+  ['edge',    'Edge'],
+  ['brave',   'Brave'],
+  ...(IS_WINDOWS ? [] : [['safari', 'Safari']]),
+]
+
 export default function Downloader() {
   const [tab, setTab] = useState('download')
 
@@ -267,11 +278,9 @@ export default function Downloader() {
               </label>
               <select className="form-select" value={cookiesFromBrowser} onChange={e => setCookiesFromBrowser(e.target.value)}>
                 <option value="">None (public content only)</option>
-                <option value="chrome">Chrome</option>
-                <option value="firefox">Firefox</option>
-                <option value="edge">Edge</option>
-                <option value="brave">Brave</option>
-                <option value="safari">Safari</option>
+                {COOKIE_BROWSERS.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                 yt-dlp will borrow your session cookies from the selected browser to download login-gated content.
