@@ -1,0 +1,19 @@
+# One cross-platform source of truth: text is stored and checked out as LF on every
+# machine, regardless of each developer's core.autocrlf setting. Without this, a commit
+# from a Windows box can flip a whole file to CRLF for no reason — the repo was already
+# all-LF in the index when this landed, and this keeps it that way.
+* text=auto eol=lf
+
+# Shell scripts must stay LF or they break when executed.
+*.sh   text eol=lf
+
+# Binaries — never touch these.
+*.png  binary
+*.ico  binary
+*.icns binary
+*.woff2 binary
+*.pdf  binary
+*.gif  binary
+*.mp3  binary
+*.mp4  binary
+*.mkv  binary
