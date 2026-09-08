@@ -1,32 +1,26 @@
 /**
  * dropHelpers — utilities for drag-and-drop file handling.
  *
- * Electron 32+ deprecated File.path. Use webUtils.getPathForFile() via
- * the preload bridge (window.htk.getPathForFile) instead.
+ * Under Tauri the paths arrive on the event itself, put there by tauriDrop.js. The
+ * remaining branches below are fallbacks for drops that carry a path some other way,
+ * such as a file URI dragged out of another application.
  */
-
-const api = window.htk
-
-/**
- * Extract the native file path from a dropped File object.
- * Uses Electron's webUtils.getPathForFile via the preload bridge.
- */
-export function getDropPath(file) {
-  if (!file) return ''
-  try {
-    if (api?.getPathForFile) return api.getPathForFile(file) || ''
-  } catch { /* fall through */ }
-  return file.path || ''
-}
 
 /**
  * Extract file paths from a drop event.
  */
 export function getDropPaths(e) {
+  // Tauri route. A webview File object has no .path — the OS-level paths only ever
+  // reach us through Tauri's own drag-drop event, which tauriDrop.js attaches here.
+  const native = e?.nativeEvent || e
+  if (Array.isArray(native?.htkPaths) && native.htkPaths.length) {
+    return [...new Set(native.htkPaths)]
+  }
+
   let paths = Array.from(e.dataTransfer?.files || [])
-    .map(f => getDropPath(f))
+    .map(f => f.path || '')
     .filter(Boolean)
-    
+
   // Fallback: If no files were parsed (e.g. dragged from a web browser or Antigravity),
   // they might be represented as text/uri-list (links to local files).
   if (paths.length === 0 && e.dataTransfer) {

@@ -4,6 +4,7 @@
  */
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { initTauriDragDrop } from './tauriDrop.js';
 
 // Helper: subscribe to Tauri events with the same API shape as ipcRenderer.on
 function onEvent(channel, cb) {
@@ -18,13 +19,6 @@ function offEvent(_channel) {
 }
 
 window.htk = {
-  // File path from drag events — Tauri doesn't have webUtils,
-  // but we can get the path from the File object if available
-  getPathForFile: (file) => {
-    // In Tauri, File objects from drag-and-drop include the path
-    return file?.path || file?.name || '';
-  },
-
   image: {
     convert:       (opts) => invoke('image_convert', { args: opts }),
     selectFiles:   ()     => invoke('image_select_files'),
@@ -128,3 +122,7 @@ window.htk = {
     offAll:            ()   => {},
   },
 };
+
+// Tauri swallows native file drops before the webview sees them, so the DOM drag events
+// every dropzone listens for never fire. Subscribe once and replay them — see tauriDrop.js.
+initTauriDragDrop();
