@@ -6,6 +6,10 @@ import WaveformPlayer from '../components/WaveformPlayer.jsx'
 import { savePageState, loadPageState } from '../pageCache.js'
 
 const FORMATS    = ['mp4', 'mkv', 'avi', 'mov', 'webm']
+// Audio-only targets: the video track is dropped and only the sound is kept.
+// The backend picks the encoder from the container, so these need no extra settings.
+const AUDIO_FORMATS = ['mp3', 'm4a', 'wav', 'flac']
+const isAudioFormat = (f) => AUDIO_FORMATS.includes(f)
 const RESOLUTIONS = ['', '1920x1080', '1280x720', '854x480', '640x360']
 const CODECS     = ['', 'libx264', 'libx265', 'vp9', 'libvpx']
 const ACODECS    = ['aac', 'mp3', 'copy', 'libopus']
@@ -70,6 +74,10 @@ export default function VideoConverter() {
   }, [cached])
 
   const basename = (p) => p ? p.split('/').pop().split('\\').pop() : ''
+
+  // Picking an audio container turns this page into an audio extractor — the
+  // video-side controls stop applying, so they are disabled rather than lying.
+  const audioOnly = isAudioFormat(outputFormat)
 
   const addFiles = useCallback((paths, autoPreview = false) => {
     setFiles(prev => {
@@ -272,27 +280,53 @@ export default function VideoConverter() {
               <div className="form-group">
                 <label className="form-label">Output Format</label>
                 <select className="form-select" value={outputFormat} onChange={e => setOutputFormat(e.target.value)}>
-                  {FORMATS.map(f => <option key={f} value={f}>{f.toUpperCase()}</option>)}
+                  <optgroup label="Video">
+                    {FORMATS.map(f => <option key={f} value={f}>{f.toUpperCase()}</option>)}
+                  </optgroup>
+                  <optgroup label="Audio only (drops the video)">
+                    {AUDIO_FORMATS.map(f => <option key={f} value={f}>{f.toUpperCase()}</option>)}
+                  </optgroup>
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Resolution</label>
-                <select className="form-select" value={resolution} onChange={e => setResolution(e.target.value)}>
+                <select
+                  className="form-select"
+                  value={resolution}
+                  onChange={e => setResolution(e.target.value)}
+                  disabled={audioOnly}
+                  title={audioOnly ? 'Not used — the video track is being dropped' : undefined}
+                >
                   <option value="">Original</option>
                   {RESOLUTIONS.filter(Boolean).map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Video Codec</label>
-                <select className="form-select" value={codec} onChange={e => setCodec(e.target.value)}>
+                <select
+                  className="form-select"
+                  value={codec}
+                  onChange={e => setCodec(e.target.value)}
+                  disabled={audioOnly}
+                  title={audioOnly ? 'Not used — the video track is being dropped' : undefined}
+                >
                   <option value="">Auto</option>
                   {CODECS.filter(Boolean).map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Quality (CRF): {crf}</label>
+                <label className="form-label">
+                  {audioOnly ? 'Quality (CRF): n/a' : `Quality (CRF): ${crf}`}
+                </label>
                 <div className="range-wrap">
-                  <input type="range" min={0} max={51} value={crf} onChange={e => setCrf(+e.target.value)} />
+                  <input
+                    type="range"
+                    min={0}
+                    max={51}
+                    value={crf}
+                    onChange={e => setCrf(+e.target.value)}
+                    disabled={audioOnly}
+                  />
                 </div>
               </div>
               <div style={{ flex: 1 }} />
@@ -303,9 +337,13 @@ export default function VideoConverter() {
                 disabled={loading || !files.some(f => f.selected)}
               >
                 {loading ? <span className="spinner">⟳</span> : null}
-                {loading 
-                  ? 'Converting…' 
-                  : `Convert ${files.filter(f => f.selected).length > 1 ? `${files.filter(f => f.selected).length} files` : 'Video'}`
+                {loading
+                  ? (audioOnly ? 'Extracting…' : 'Converting…')
+                  : (() => {
+                      const n = files.filter(f => f.selected).length
+                      const what = n > 1 ? `${n} files` : (audioOnly ? 'Audio' : 'Video')
+                      return `${audioOnly ? 'Extract' : 'Convert'} ${what}`
+                    })()
                 }
               </button>
             </div>

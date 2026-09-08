@@ -91,6 +91,37 @@ fn sanitize(name: &str) -> String {
         .collect()
 }
 
+/// Encoder to use when the video converter is asked for an audio-only container.
+///
+/// Picking one of these output formats means "throw the picture away and keep the
+/// sound" — the usual reason being an MP4 you want as an MP3. Returns `None` for a
+/// real video container.
+///
+/// The encoder is chosen from the container rather than from the Advanced tab's Audio
+/// Codec setting: that setting exists to pick the audio track *inside* a video file,
+/// and its default (`aac`) is not muxable into an `.mp3`. Honouring it here would turn
+/// the common case into an ffmpeg error.
+fn audio_only_encoder(format: &str) -> Option<&'static str> {
+    match format.to_ascii_lowercase().as_str() {
+        "mp3" => Some("libmp3lame"),
+        "m4a" | "aac" => Some("aac"),
+        "wav" => Some("pcm_s16le"),
+        "flac" => Some("flac"),
+        "ogg" | "opus" => Some("libopus"),
+        _ => None,
+    }
+}
+
+/// Lossless audio targets, where a bitrate is meaningless.
+///
+/// ffmpeg does not reject `-b:a` here — verified against the bundled 6.1.1 build, it
+/// accepts the flag for pcm and flac and silently ignores it, byte-for-byte identical
+/// output either way. So this guard is about not sending a setting that has no meaning
+/// for the target, not about avoiding an error.
+fn is_lossless_audio(format: &str) -> bool {
+    matches!(format.to_ascii_lowercase().as_str(), "wav" | "flac")
+}
+
 #[tauri::command]
 pub async fn video_convert(app: AppHandle, args: VideoConvertArgs) -> MediaResult {
     let ffmpeg = ffmpeg_path(&app);
@@ -120,26 +151,36 @@ pub async fn video_convert(app: AppHandle, args: VideoConvertArgs) -> MediaResul
     let out_path = PathBuf::from(&args.output_dir)
         .join(format!("{}.{}", base_name, args.output_format));
 
+    // An audio-only target drops the video stream, and with it every video-side
+    // setting — codec, resolution, CRF, frame rate and decode acceleration all either
+    // do nothing or make ffmpeg fail once there is no picture to work on.
+    let audio_encoder = audio_only_encoder(&args.output_format);
+    let audio_only = audio_encoder.is_some();
+
     let mut cmd_args: Vec<String> = Vec::new();
 
     // Hardware acceleration
     if let Some(ref hw) = args.hw_accel {
-        if !hw.is_empty() {
+        if !hw.is_empty() && !audio_only {
             cmd_args.extend(["-hwaccel".into(), hw.clone()]);
         }
     }
 
     cmd_args.extend(["-i".into(), args.file_path.clone()]);
 
-    // Video codec
-    if let Some(ref codec) = args.codec {
+    if audio_only {
+        cmd_args.push("-vn".into());
+    } else if let Some(ref codec) = args.codec {
+        // Video codec
         if !codec.is_empty() {
             cmd_args.extend(["-c:v".into(), codec.clone()]);
         }
     }
 
     // Audio codec
-    if let Some(ref ac) = args.audio_codec {
+    if let Some(encoder) = audio_encoder {
+        cmd_args.extend(["-c:a".into(), encoder.into()]);
+    } else if let Some(ref ac) = args.audio_codec {
         if !ac.is_empty() {
             cmd_args.extend(["-c:a".into(), ac.clone()]);
         }
@@ -147,19 +188,21 @@ pub async fn video_convert(app: AppHandle, args: VideoConvertArgs) -> MediaResul
 
     // Resolution
     if let Some(ref res) = args.resolution {
-        if !res.is_empty() {
+        if !res.is_empty() && !audio_only {
             cmd_args.extend(["-s".into(), res.clone()]);
         }
     }
 
     // CRF
     if let Some(crf) = args.crf {
-        cmd_args.extend(["-crf".into(), crf.to_string()]);
+        if !audio_only {
+            cmd_args.extend(["-crf".into(), crf.to_string()]);
+        }
     }
 
     // Audio bitrate
     if let Some(ref ab) = args.audio_bitrate {
-        if !ab.is_empty() {
+        if !ab.is_empty() && !is_lossless_audio(&args.output_format) {
             cmd_args.extend(["-b:a".into(), ab.clone()]);
         }
     }
@@ -167,7 +210,7 @@ pub async fn video_convert(app: AppHandle, args: VideoConvertArgs) -> MediaResul
     // FPS
     if let Some(ref fps) = args.fps {
         if let Ok(f) = fps.parse::<u32>() {
-            if f > 0 {
+            if f > 0 && !audio_only {
                 cmd_args.extend(["-r".into(), f.to_string()]);
             }
         }
@@ -544,5 +587,43 @@ pub async fn media_clip(app: AppHandle, args: ClipArgs) -> MediaResult {
             output_path: None,
             error: Some(e.to_string()),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn video_containers_are_not_audio_only() {
+        // A false positive here would silently strip the picture out of every
+        // ordinary conversion, so guard the real video formats explicitly.
+        for f in ["mp4", "mkv", "avi", "mov", "webm"] {
+            assert!(audio_only_encoder(f).is_none(), "{f} must keep its video track");
+        }
+    }
+
+    #[test]
+    fn audio_containers_pick_a_muxable_encoder() {
+        assert_eq!(audio_only_encoder("mp3"), Some("libmp3lame"));
+        assert_eq!(audio_only_encoder("m4a"), Some("aac"));
+        assert_eq!(audio_only_encoder("wav"), Some("pcm_s16le"));
+        assert_eq!(audio_only_encoder("flac"), Some("flac"));
+        assert_eq!(audio_only_encoder("ogg"), Some("libopus"));
+    }
+
+    #[test]
+    fn format_matching_ignores_case() {
+        assert_eq!(audio_only_encoder("MP3"), Some("libmp3lame"));
+        assert!(is_lossless_audio("WAV"));
+    }
+
+    #[test]
+    fn only_lossless_targets_refuse_a_bitrate() {
+        assert!(is_lossless_audio("wav"));
+        assert!(is_lossless_audio("flac"));
+        assert!(!is_lossless_audio("mp3"));
+        assert!(!is_lossless_audio("m4a"));
+        assert!(!is_lossless_audio("mp4"));
     }
 }
