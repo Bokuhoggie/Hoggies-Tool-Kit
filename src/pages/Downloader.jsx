@@ -40,15 +40,7 @@ export default function Downloader() {
   // yt-dlp metadata
   const [ytDlpVersion, setYtDlpVersion] = useState('')
   const [ytDlpUpdating, setYtDlpUpdating] = useState(false)
-  const [setupStage, setSetupStage] = useState(null) // null | 'downloading' | 'ready'
-
-  // First-run binary download notifier — listen once on mount
-  useEffect(() => {
-    api.downloader.onSetup(({ stage }) => {
-      setSetupStage(stage)
-      if (stage === 'ready') setTimeout(() => setSetupStage(null), 1500)
-    })
-  }, [])
+  const [setupStage, setSetupStage] = useState(null) // null | 'downloading' | 'updating' | 'ready'
 
   // Probe yt-dlp version on mount (and after updates)
   const refreshYtDlpVersion = () => {
@@ -57,6 +49,18 @@ export default function Downloader() {
     }).catch(() => {})
   }
   useEffect(refreshYtDlpVersion, [])
+
+  // Binary setup notifier — first-run download, and the automatic update that runs when
+  // a site has outgrown the installed yt-dlp. Listen once on mount.
+  useEffect(() => {
+    api.downloader.onSetup(({ stage }) => {
+      setSetupStage(stage)
+      if (stage === 'ready') {
+        refreshYtDlpVersion()
+        setTimeout(() => setSetupStage(null), 1500)
+      }
+    })
+  }, [])
 
   const updateYtDlp = async () => {
     setYtDlpUpdating(true)
@@ -192,10 +196,14 @@ export default function Downloader() {
               </div>
             )}
 
-            {setupStage === 'downloading' && (
+            {(setupStage === 'downloading' || setupStage === 'updating') && (
               <div className="progress-wrap">
                 <div className="progress-label">
-                  <span>Setting up yt-dlp (one-time, ~30 MB)…</span>
+                  <span>
+                    {setupStage === 'updating'
+                      ? 'Updating yt-dlp (sites change their players often)…'
+                      : 'Setting up yt-dlp (one-time, ~30 MB)…'}
+                  </span>
                 </div>
                 <div className="progress-track">
                   <div className="progress-bar progress-bar-indeterminate" style={{ width: '40%' }} />
@@ -203,7 +211,7 @@ export default function Downloader() {
               </div>
             )}
 
-            {loading && setupStage !== 'downloading' && (
+            {loading && setupStage !== 'downloading' && setupStage !== 'updating' && (
               <div className="progress-wrap">
                 <div className="progress-label">
                   <span>{progress?.title || 'Starting download…'}</span>
