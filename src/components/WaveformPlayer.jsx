@@ -4,6 +4,29 @@ const api = window.htk
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
+// A <video> that fails to load does so silently — it just renders an empty black box,
+// which is indistinguishable from "the app is broken". Turn the MediaError into
+// something that says which half went wrong: reaching the file, or decoding it.
+function describeMediaError(el) {
+  const err = el?.error
+  // Also log it: in `tauri dev` the webview's console is piped into the terminal, so a
+  // failed preview leaves a record with the codes intact rather than only a UI banner.
+  console.error('[preview] media failed', {
+    code: err?.code,
+    message: err?.message,
+    src: el?.currentSrc || el?.src,
+    networkState: el?.networkState,
+    readyState: el?.readyState,
+  })
+  switch (err?.code) {
+    case 1: return 'Playback was aborted.'
+    case 2: return 'Could not read the file — the app could not fetch it from disk.'
+    case 3: return 'The file was read, but its video codec cannot be decoded by the built-in player.'
+    case 4: return 'This container or codec is not supported by the built-in player.'
+    default: return err?.message || 'The file could not be played.'
+  }
+}
+
 function formatTime(seconds) {
   if (!seconds || isNaN(seconds)) return '0:00'
   const m = Math.floor(seconds / 60)
@@ -59,6 +82,7 @@ export default function WaveformPlayer({
   const [peaks, setPeaks]             = useState([])
   const [waveLoading, setWaveLoading] = useState(true)
   const [playing, setPlaying]         = useState(false)
+  const [mediaError, setMediaError]   = useState(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration]       = useState(0)
   const [clipStart, setClipStart]     = useState(null)
@@ -107,6 +131,7 @@ export default function WaveformPlayer({
     setClipResult(null)
     setHoverTime(null)
     setRazorMode(false)
+    setMediaError(null)
     setWaveLoading(!!filePath)
   }
 
@@ -173,8 +198,17 @@ export default function WaveformPlayer({
   const togglePlay = useCallback(() => {
     const el = mediaRef.current
     if (!el) return
-    if (el.paused) { el.play(); setPlaying(true) }
-    else           { el.pause(); setPlaying(false) }
+    if (el.paused) {
+      // play() rejects on an unplayable source. Without this the button flips to
+      // "pause" and nothing happens, which reads as the control being dead.
+      const started = el.play()
+      if (started?.catch) {
+        started.catch(() => { setPlaying(false); setMediaError(describeMediaError(el)) })
+      }
+      setPlaying(true)
+    } else {
+      el.pause(); setPlaying(false)
+    }
   }, [])
 
   const handleEnded = useCallback(() => setPlaying(false), [])
@@ -534,12 +568,20 @@ export default function WaveformPlayer({
           onEnded={handleEnded}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
+          onError={(e) => { setPlaying(false); setMediaError(describeMediaError(e.target)) }}
           onLoadedMetadata={(e) => {
+            setMediaError(null)
             setDuration(e.target.duration)
             e.target.volume = volume
             e.target.playbackRate = speed
           }}
         />
+        {mediaError && (
+          <div className="media-preview-error">
+            <div>✗ {mediaError}</div>
+            <div className="media-preview-error-path" title={mediaUrl}>{mediaUrl}</div>
+          </div>
+        )}
       </div>
 
       {/* ── Controls ── */}

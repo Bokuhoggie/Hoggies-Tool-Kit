@@ -700,6 +700,25 @@ body.theme-light::after { display: none; }
   line-height: 0;               /* kill extra space below video */
 }
 
+/* Shown in place of the black box when the <video> refuses the file, so a failed
+   preview says why instead of looking like a dead panel. */
+.media-preview-error {
+  padding: 12px 14px;
+  line-height: 1.5;
+  font-size: calc(11px * var(--font-scale));
+  color: var(--error, #ef4444);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--error, #ef4444);
+}
+
+.media-preview-error-path {
+  margin-top: 6px;
+  font-family: monospace;
+  font-size: calc(10px * var(--font-scale));
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
 .media-preview-audio {
   display: block;
   width: 100%;

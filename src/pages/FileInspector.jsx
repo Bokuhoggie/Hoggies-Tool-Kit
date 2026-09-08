@@ -43,6 +43,12 @@ export default function FileInspector() {
 
   const [error, setError] = useState(null)
   const [showPreview, setShowPreview] = useState(false)
+
+  // Chop the INSPECT blade while analysing or hashing — this was the one tool page
+  // that ran work without telling the widget about it.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('blade-busy', { detail: { route: '/inspector', busy: loading || hashing } }))
+  }, [loading, hashing])
   const [imagePreview, setImagePreview] = useState(null)
 
   const analyze = useCallback(async (filePath) => {

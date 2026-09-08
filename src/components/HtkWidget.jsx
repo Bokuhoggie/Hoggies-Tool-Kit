@@ -479,6 +479,16 @@ const RIGHT_TOOLS = [
 
 const ALL_TOOLS = [...LEFT_TOOLS, ...RIGHT_TOOLS]
 
+/* ── Busy chop ──
+   How far down the blade swings on each chop, as a fraction of the distance from
+   fully open back towards folded. Deep enough to read as a chop from across the
+   room, short of the handle so it never looks like the knife is closing. */
+const CHOP_DEPTH   = 0.45
+const CHOP_STRIKE_MS = 90    // blade travelling down — fast, it's a cut
+const CHOP_HOLD_MS   = 60    // beat at the bottom
+const CHOP_LIFT_MS   = 260   // blade travelling back up — slower, winding up
+const CHOP_REST_MS   = 110   // beat at the top before the next one
+
 /* ============================================================
    WIDGET
 ============================================================ */
@@ -492,10 +502,12 @@ export default function HtkWidget() {
   const [dragOverWidget, setDragOverWidget] = useState(false)
   const [isWaving, setIsWaving] = useState(false)
   const [waveBlades, setWaveBlades] = useState(new Set())
-  // Tool currently doing work — its blade is held in the open/raised position
-  // so the user sees which tool is busy without the choppy wave loop visualizing
-  // every blade incorrectly.
+  // Tool currently doing work — its blade swings out and chops until the job
+  // finishes, so the busy tool is obvious even with the knife folded shut. Only
+  // that one blade moves; the wave loop animates all of them and means something
+  // else entirely.
   const [busyRoute, setBusyRoute] = useState(null)
+  const [chopDown, setChopDown] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -555,6 +567,20 @@ export default function HtkWidget() {
     }, INTERVAL)
     return () => clearInterval(id)
   }, [isWaving])
+
+  // Chop: while a tool is working, its blade strikes down and lifts back, on repeat.
+  // The timing is deliberately asymmetric — a quick strike and a slower recovery reads
+  // as chopping, where an even back-and-forth just reads as a wobble.
+  useEffect(() => {
+    if (!busyRoute) { setChopDown(false); return }
+    let timer
+    const step = (down) => {
+      setChopDown(down)
+      timer = setTimeout(() => step(!down), down ? CHOP_STRIKE_MS + CHOP_HOLD_MS : CHOP_LIFT_MS + CHOP_REST_MS)
+    }
+    step(true)
+    return () => clearTimeout(timer)
+  }, [busyRoute])
 
   // Dynamic layout based on route
   const isHome = location.pathname === '/'
@@ -661,9 +687,12 @@ export default function HtkWidget() {
           // Wave opens only 40% of the way — a quick chop, not a full fan
           const waveAngle = tool.angleClosed + (tool.angleOpen - tool.angleClosed) * 0.4
 
+          // Chop swings between fully raised and CHOP_DEPTH of the way back down.
+          const chopAngle = tool.angleOpen + (tool.angleClosed - tool.angleOpen) * CHOP_DEPTH
+
           let currentAngle = tool.angleClosed
           if (isOpen) currentAngle = tool.angleOpen
-          else if (isBusy) currentAngle = tool.angleOpen   // hold raised while working
+          else if (isBusy) currentAngle = chopDown ? chopAngle : tool.angleOpen
           else if (isWaveActive) currentAngle = waveAngle
           else if (isPeeking) {
              currentAngle = tool.angleClosed + (tool.angleOpen - tool.angleClosed) * 0.4
@@ -678,8 +707,17 @@ export default function HtkWidget() {
                 top: `${topOffset}px`,
                 transform: `rotate(${currentAngle}deg)`,
                 zIndex: (hovered === tool.route || flickingTool === tool.route || isPeeking || isWaveActive || isBusy) ? 15 : 10,
-                // Snappy choppy transition while waving; normal stagger otherwise
-                ...(isWaving ? { transition: 'transform 75ms cubic-bezier(0.2, 0, 0.6, 1)' } : {
+                // Chopping beats waving beats the normal open/close stagger. The strike
+                // eases in and the lift eases out, so the blade accelerates into the cut
+                // and settles at the top instead of bouncing like the default spring.
+                ...(isBusy
+                  ? {
+                      transition: chopDown
+                        ? `transform ${CHOP_STRIKE_MS}ms cubic-bezier(0.45, 0, 0.9, 0.55)`
+                        : `transform ${CHOP_LIFT_MS}ms cubic-bezier(0.2, 0.7, 0.4, 1)`,
+                      transitionDelay: '0ms',
+                    }
+                  : isWaving ? { transition: 'transform 75ms cubic-bezier(0.2, 0, 0.6, 1)' } : {
                   transitionDelay: (flickingTool === tool.route || isPeeking)
                     ? '0ms'
                     : (open
